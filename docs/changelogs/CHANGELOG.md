@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-09-08
+
+### Added
+- **Live Neon PostgreSQL Integration & Data Wipe**:
+  - Connected schema and queries directly to Neon PostgreSQL.
+  - Executed database wipe script ensuring clean zero-listing production state with fundamental relational foreign keys initialized (`property_types`, `pipeline_statuses`).
+- **Prisma Entity Serializer (`lib/serializers/listing.ts`)**:
+  - Implemented bidirectional serialization between Prisma database models (PostgreSQL `Decimal`, relation camelCase `priceHistory`/`viewingLogs`) and frontend TypeScript interfaces (`Listing`, `PriceHistory`, `Contract`, `ViewingLog`, `CenterPoint`).
+  - Added robust sanitization of dates, nested entities, and amenities JSON structures.
+- **Full REST API Endpoints (`app/api/`)**:
+  - **Listings API (`app/api/listings/route.ts`, `app/api/listings/[id]/route.ts`)**:
+    - `GET /api/listings`: Filter by `type`, `status`, `search`, and `favorite`.
+    - `POST /api/listings`: Creates listings and related price histories / contracts in a single transaction.
+    - `GET /api/listings/[id]`: Fetches a single listing with all relations.
+    - `PUT /api/listings/[id]`: Full updates of metadata, physical specifications, amenities, and contact info.
+    - `PATCH /api/listings/[id]`: Atomic updates for instant actions like favorite toggles and pipeline status changes.
+    - `DELETE /api/listings/[id]`: Cascading deletion of listings and sub-resources.
+  - **Sub-Resource APIs**:
+    - `POST /api/listings/[id]/price-history` & `DELETE /api/listings/[id]/price-history/[historyId]`
+    - `POST /api/listings/[id]/viewings`, `PATCH /api/listings/[id]/viewings/[viewingId]`, & `DELETE /api/listings/[id]/viewings/[viewingId]`
+    - `PUT /api/listings/[id]/contract` & `DELETE /api/listings/[id]/contract`
+  - **Reference Center Points API (`app/api/center-points/route.ts`, `app/api/center-points/[id]/route.ts`)**:
+    - Complete CRUD endpoints for commuting reference points and landmarks.
+  - **Metadata API (`app/api/metadata/route.ts`)**:
+    - System lookup endpoint for property types and pipeline statuses.
+- **Zustand Live Database Sync & Cache Invalidation (`store/maps-store.ts`, `app/(dashboard)/layout.tsx`)**:
+  - Disconnected hardcoded mock data from default initial state (`listings: []`, `centerPoints: []`).
+  - Implemented `fetchInitialData()` to fetch real database rows from Neon upon dashboard load.
+  - Upgraded store persistence version to `nestpick-store-v2` and removed listings and center points from `partialize` so Neon PostgreSQL remains the single source of truth.
+  - Added legacy local storage purge (`nestpick-store-v1`, `nestpick-maps-storage`) on mount.
+  - Implemented optimistic UI updates with asynchronous background HTTP synchronization for all CRUD actions (`addListing`, `updateListing`, `deleteListing`, `toggleFavorite`, `addPriceHistory`, `deletePriceHistory`, `addViewingLog`, `updateViewingLog`, `deleteViewingLog`, `updateContract`, `deleteContract`, `addCenterPoint`, `deleteCenterPoint`).
+- **Loading & Empty UI Feedback States (`components/dashboard/maps-panel.tsx`, `components/dashboard/table-view.tsx`)**:
+  - Added loading indicator spinners in `MapsPanel` and `TableView` when hydrating listings from the database.
+- **Comprehensive API Documentation (`docs/api.md`)**:
+  - Created complete REST API reference document detailing request bodies, query parameters, response structures, and authentication requirements.
+
+---
+
 ## [0.3.2] - 2026-09-08
 
 ### Added
@@ -16,13 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configured JWT session strategy and dual secret support (`NEXTAUTH_SECRET` and `AUTH_SECRET`).
 - **Route Protection Proxy (`proxy.ts`)**:
   - Configured Next.js 16's `proxy.ts` (successor to `middleware.ts`).
-  - Automatically redirects unauthenticated requests on all dashboard routes (`/`, `/table`, `/compare`, `/favorites`, `/recents`) and API endpoints to `/login?callbackUrl=...`.
+  - Automatically redirects unauthenticated requests on all dashboard routes (`/`, `/table`, `/compare`, `/favorites`, `/recents`) and API endpoints to `/login?callbackUrl=...`.\
   - Automatically redirects authenticated users away from `/login` back to the dashboard (`/`).
 - **Standalone Login Page (`app/login/page.tsx`)**:
   - Built dedicated login interface matching NestPick's styling, featuring brand logo, title, and theme switcher (`ThemeToggle`).
   - Username and password input fields with Lucide icons.
   - Password reveal toggle eye icon vertically centered using `inset-y-0` with pointer cursor.
-  - Error alert banners and loading spinner states on submit.
+  - Error alert banners and loading spinner states on submit.\
   - Wrapped form in React `<Suspense>` boundary for safe client parameter handling.
 - **Sidebar Session & Sign Out (`components/dashboard/sidebar.tsx`, `components/session-provider.tsx`)**:
   - Added client `SessionProvider` wrapper in `app/layout.tsx`.
@@ -100,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `togglePanelVisible` action to Zustand maps store.
   - Enabled manual collapse and restoration of the floating maps panel on both desktop and mobile.
   - Added floating restore button with listing count badge (`PanelLeftOpen`) when panel is closed.
-- **Mobile Sidebar Trigger (`components/dashboard/map-controls.tsx`)**:\
+- **Mobile Sidebar Trigger (`components/dashboard/map-controls.tsx`)**:
   - Added mobile-only trigger button (`sm:hidden`) in top-right map controls to open the navigation drawer sheet on smaller screens.
 
 ### Changed & Fixed
@@ -108,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced redundant dropdown menu on the logo with a plain branding logo link.
   - Fixed sidebar toggle button alignment and spacing in `SidebarHeader`.
   - Switched sidebar collapse mode from `offcanvas` to `icon`, preserving a 48px navigation rail when collapsed instead of disappearing off-screen.
-  - Added centered trigger button in the icon rail and hover tooltips for all navigation items.\
+  - Added centered trigger button in the icon rail and hover tooltips for all navigation items.
 - **Listing Modal UI Fixes (`components/dashboard/listing-modal.tsx`)**:
   - Converted pipeline status selection from badge chips into a clean `<Select>` dropdown with color status indicators.
   - Removed numeric prefixes (`1. `, `2. `, etc.) from all modal section titles.
@@ -148,14 +186,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [0.1.0] - 2026-09-07
-
-### Initial Release: Modern Maps Condo & Apartment Hunting Tracker
-
-Transformed the template into a production-ready single-user condo/apartment hunting tracker for Bangkok rentals, while strictly preserving the template's layout architecture (collapsible sidebar, floating card panel, and full MapLibre background map).
-
-### Added
-- **Data Models & Types (`types/hunting.ts`)**:
-  - Full TypeScript models for `Listing`, `PriceHistory`, `Contract`, `ViewingLog`, `Amenities`, `CenterPoint`, `PropertyType`, and `PipelineStatus`.
-  - Added support for 4 property types: `condo`, `apartment`, `dorm`, `house`.
-  - Added 6-stage tracking pipeline: `interested` → `viewing_scheduled` → `viewed` → `negotiating` → `decided` → `rejected`.
-- **Bangkok Rental Mock Dataset (`mock-data/condos.ts`)**:

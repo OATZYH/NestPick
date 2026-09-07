@@ -4,17 +4,23 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Search,
-  Plus,
   Heart,
-  MapPin,
-  Edit2,
-  Trash2,
   ExternalLink,
-  Target,
-  ArrowUpDown,
   Phone,
   MessageCircle,
+  Plus,
+  Target,
+  Edit2,
+  Trash2,
+  MapPin,
+  Search,
+  Filter,
+  ArrowUpDown,
+  Building2,
+  Building,
+  GraduationCap,
+  Home,
+  Check,
   Dumbbell,
   Waves,
   Car,
@@ -46,6 +52,7 @@ import { cn } from "@/lib/utils";
 export function TableView() {
   const router = useRouter();
   const {
+    isLoading,
     searchQuery,
     setSearchQuery,
     selectedCategory,
@@ -88,13 +95,13 @@ export function TableView() {
               {listings.length} places
             </Badge>
           </h1>
-          <p className="text-xs text-muted-foreground">
-            Excel & Google Sheets style table for quick data entry, sorting, and status updates.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Compare all properties in a dense, sortable matrix view.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Target Reference Button */}
+        <div className="flex items-center gap-2">
+          {/* Target Center Point Button */}
           <Button
             variant="outline"
             size="sm"
@@ -150,67 +157,65 @@ export function TableView() {
             className="h-7 text-xs px-2"
             onClick={() => setSelectedCategory("all")}
           >
-            All
+            All Types
           </Button>
-          {propertyTypes.map((pt) => (
+          {propertyTypes.map((t) => (
             <Button
-              key={pt.id}
-              variant={selectedCategory === pt.id ? "default" : "ghost"}
+              key={t.id}
+              variant={selectedCategory === t.id ? "default" : "ghost"}
               size="sm"
-              className="h-7 text-xs px-2 capitalize"
-              onClick={() => setSelectedCategory(pt.id)}
+              className="h-7 text-xs px-2"
+              onClick={() => setSelectedCategory(t.id)}
             >
-              {pt.name}
+              {t.name}
             </Button>
           ))}
         </div>
 
-        <div className="h-4 w-px bg-border" />
-
-        {/* Status Filter */}
-        <div className="flex items-center gap-1">
+        {/* Pipeline Status Filter */}
+        <div className="flex items-center gap-1 border-l pl-3">
           <Button
             variant={selectedStatus === "all" ? "secondary" : "ghost"}
             size="sm"
             className="h-7 text-xs px-2"
             onClick={() => setSelectedStatus("all")}
           >
-            All Status
+            All Statuses
           </Button>
-          {pipelineStatuses.map((st) => (
+          {pipelineStatuses.slice(0, 4).map((s) => (
             <Button
-              key={st.id}
-              variant={selectedStatus === st.id ? "secondary" : "ghost"}
+              key={s.id}
+              variant={selectedStatus === s.id ? "secondary" : "ghost"}
               size="sm"
               className="h-7 text-xs px-2"
-              onClick={() => setSelectedStatus(st.id)}
+              onClick={() => setSelectedStatus(s.id)}
             >
               <span
-                className="size-1.5 rounded-full mr-1 inline-block"
-                style={{ backgroundColor: st.color }}
+                className="size-1.5 rounded-full mr-1.5"
+                style={{ backgroundColor: s.color }}
               />
-              {st.name}
+              {s.name}
             </Button>
           ))}
         </div>
       </div>
 
-      {/* Spreadsheet Table Area */}
+      {/* Table Content */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full text-xs border-collapse">
           {/* Table Header */}
-          <thead className="bg-muted/60 sticky top-0 z-10 border-b shadow-xs">
+          <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10 border-b font-semibold text-muted-foreground text-left">
             <tr className="divide-x divide-border">
-              <th className="p-2.5 w-10 text-center">★</th>
-              <th className="p-2.5 w-16 text-center">Photo</th>
-              <th className="p-2.5 min-w-[200px]">Property Name & Address</th>
+              <th className="p-2 w-10 text-center">Fav</th>
+              <th className="p-2 w-14 text-center">Photo</th>
+              <th className="p-2.5 min-w-44">Name & Address</th>
               <th className="p-2.5 w-24">Type</th>
-              <th className="p-2.5 w-36">Pipeline Status</th>
-              <th className="p-2.5 w-28 text-right">Rent (฿/mo)</th>
+              <th className="p-2.5 w-32">Status</th>
+              <th className="p-2.5 w-24 text-right">Rent / Mo</th>
               <th className="p-2.5 w-24 text-right">Deposit</th>
               <th className="p-2.5 w-20 text-right">Size</th>
               <th className="p-2.5 w-16 text-center">Floor</th>
-              <th className="p-2.5 w-28">To Target</th>
+              <th className="p-2.5 w-24">Distance</th>
               <th className="p-2.5 w-32">Amenities</th>
               <th className="p-2.5 w-28">Contact</th>
               <th className="p-2.5 w-24 text-center">Actions</th>
@@ -219,7 +224,16 @@ export function TableView() {
 
           {/* Table Body */}
           <tbody className="divide-y divide-border">
-            {listings.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={13} className="p-12 text-center text-muted-foreground">
+                  <div className="inline-flex items-center gap-2 text-xs">
+                    <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span>Loading listings from database...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : listings.length === 0 ? (
               <tr>
                 <td colSpan={13} className="p-8 text-center text-muted-foreground">
                   No listings found matching the criteria.
@@ -288,8 +302,8 @@ export function TableView() {
                           <a
                             href={listing.source_url}
                             target="_blank"
-                            rel="noreferrer"
-                            className="text-muted-foreground hover:text-foreground"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-primary"
                           >
                             <ExternalLink className="size-3" />
                           </a>
@@ -299,61 +313,58 @@ export function TableView() {
                         {listing.address}
                       </div>
                       {listing.notes && (
-                        <div className="text-[10px] text-muted-foreground italic truncate max-w-xs mt-0.5">
-                          &ldquo;{listing.notes}&rdquo;
+                        <div className="text-[10px] text-muted-foreground/80 line-clamp-1 italic mt-0.5">
+                          "{listing.notes}"
                         </div>
                       )}
                     </td>
 
-                    {/* Type */}
+                    {/* Property Type */}
                     <td className="p-2.5">
-                      <span className="capitalize font-medium text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px] uppercase font-mono">
                         {typeConfig?.name || listing.type}
-                      </span>
+                      </Badge>
                     </td>
 
-                    {/* Pipeline Status (Interactive Dropdown) */}
-                    <td className="p-2">
+                    {/* Pipeline Status with Dropdown */}
+                    <td className="p-2.5">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
-                            className={cn(
-                              "w-full text-left px-2 py-1 rounded border text-[11px] font-medium flex items-center justify-between gap-1",
-                              statusConfig?.badgeClass
-                            )}
-                          >
-                            <span className="truncate">
-                              {statusConfig?.name || listing.status}
-                            </span>
-                            <ArrowUpDown className="size-2.5 opacity-60" />
+                          <button className="flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] hover:bg-muted font-medium cursor-pointer">
+                            <span
+                              className="size-2 rounded-full shrink-0"
+                              style={{ backgroundColor: statusConfig?.color || "#94a3b8" }}
+                            />
+                            <span className="truncate">{statusConfig?.name || listing.status}</span>
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuContent align="start" className="text-xs">
                           {pipelineStatuses.map((st) => (
                             <DropdownMenuItem
                               key={st.id}
                               onClick={() => handleStatusChange(listing.id, st.id)}
-                              className="text-xs gap-2"
+                              className="gap-2 text-xs"
                             >
                               <span
-                                className="size-2 rounded-full inline-block"
+                                className="size-2 rounded-full"
                                 style={{ backgroundColor: st.color }}
                               />
                               <span>{st.name}</span>
+                              {listing.status === st.id && <Check className="size-3 ml-auto" />}
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
 
-                    {/* Rent */}
-                    <td className="p-2.5 text-right font-bold text-blue-600 dark:text-blue-400">
+                    {/* Rent / Mo */}
+                    <td className="p-2.5 text-right font-bold text-foreground">
                       ฿{rent.toLocaleString()}
                     </td>
 
                     {/* Deposit */}
                     <td className="p-2.5 text-right text-muted-foreground">
-                      {deposit > 0 ? `฿${deposit.toLocaleString()}` : "-"}
+                      ฿{deposit.toLocaleString()}
                     </td>
 
                     {/* Size */}
@@ -408,12 +419,12 @@ export function TableView() {
                     </td>
 
                     {/* Contact */}
-                    <td className="p-2">
-                      <div className="flex items-center gap-1">
+                    <td className="p-2.5">
+                      <div className="flex items-center gap-2">
                         {listing.contact_phone && (
                           <a
                             href={`tel:${listing.contact_phone}`}
-                            title={`Call ${listing.contact_phone}`}
+                            title={listing.contact_phone}
                             className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                           >
                             <Phone className="size-3.5" />
@@ -421,11 +432,11 @@ export function TableView() {
                         )}
                         {listing.contact_line && (
                           <a
-                            href={`https://line.me/ti/p/~${listing.contact_line.replace("@", "")}`}
+                            href={`https://line.me/ti/p/~${listing.contact_line}`}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             title={`LINE: ${listing.contact_line}`}
-                            className="p-1 rounded hover:bg-muted text-green-500 hover:text-green-600"
+                            className="p-1 rounded hover:bg-green-500/10 text-muted-foreground hover:text-green-600"
                           >
                             <MessageCircle className="size-3.5" />
                           </a>

@@ -112,14 +112,22 @@ interface MapsState {
     listingId: string,
     entry: Omit<PriceHistory, "id" | "listing_id" | "recorded_at"> & { recorded_at?: string }
   ) => Promise<void>;
+  deletePriceHistory: (listingId: string, historyId: string) => Promise<void>;
   addViewingLog: (
     listingId: string,
     log: Omit<ViewingLog, "id" | "listing_id">
   ) => Promise<void>;
+  updateViewingLog: (
+    listingId: string,
+    viewingId: string,
+    updates: Partial<ViewingLog>
+  ) => Promise<void>;
+  deleteViewingLog: (listingId: string, viewingId: string) => Promise<void>;
   updateContract: (
     listingId: string,
     contract: Omit<Contract, "id" | "listing_id">
   ) => Promise<void>;
+  deleteContract: (listingId: string) => Promise<void>;
   toggleCompareListing: (listingId: string) => void;
   clearCompareListings: () => void;
   setMapCenter: (center: { lat: number; lng: number }) => void;
@@ -451,6 +459,26 @@ export const useMapsStore = create<MapsState>()(
         }
       },
 
+      deletePriceHistory: async (listingId, historyId) => {
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              price_history: (l.price_history || []).filter((p) => p.id !== historyId),
+            };
+          }),
+        }));
+
+        try {
+          await fetch(`/api/listings/${listingId}/price-history/${historyId}`, {
+            method: "DELETE",
+          });
+        } catch (e) {
+          console.error("Failed to delete price history:", e);
+        }
+      },
+
       addViewingLog: async (listingId, log) => {
         const tempId = `vl-${Date.now()}`;
         const newLog: ViewingLog = {
@@ -494,6 +522,64 @@ export const useMapsStore = create<MapsState>()(
         }
       },
 
+      updateViewingLog: async (listingId, viewingId, updates) => {
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              viewing_logs: (l.viewing_logs || []).map((v) =>
+                v.id === viewingId ? { ...v, ...updates } : v
+              ),
+            };
+          }),
+        }));
+
+        try {
+          const res = await fetch(`/api/listings/${listingId}/viewings/${viewingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
+          if (res.ok) {
+            const saved: ViewingLog = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) => {
+                if (l.id !== listingId) return l;
+                return {
+                  ...l,
+                  viewing_logs: (l.viewing_logs || []).map((v) =>
+                    v.id === viewingId ? saved : v
+                  ),
+                };
+              }),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to update viewing log:", e);
+        }
+      },
+
+      deleteViewingLog: async (listingId, viewingId) => {
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              viewing_logs: (l.viewing_logs || []).filter((v) => v.id !== viewingId),
+            };
+          }),
+        }));
+
+        try {
+          await fetch(`/api/listings/${listingId}/viewings/${viewingId}`, {
+            method: "DELETE",
+          });
+        } catch (e) {
+          console.error("Failed to delete viewing log:", e);
+        }
+      },
+
       updateContract: async (listingId, contract) => {
         const newContract: Contract = {
           ...contract,
@@ -527,6 +613,26 @@ export const useMapsStore = create<MapsState>()(
           }
         } catch (e) {
           console.error("Failed to persist contract:", e);
+        }
+      },
+
+      deleteContract: async (listingId) => {
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              contract: undefined,
+            };
+          }),
+        }));
+
+        try {
+          await fetch(`/api/listings/${listingId}/contract`, {
+            method: "DELETE",
+          });
+        } catch (e) {
+          console.error("Failed to delete contract:", e);
         }
       },
 
