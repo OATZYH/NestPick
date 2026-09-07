@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1] - 2026-09-07
+
+### Changed
+- Rebranded project name from "maps" to **NestPick**:
+  - Updated package name in `package.json` to `nestpick`.
+  - Updated application title and metadata in `app/layout.tsx` to "NestPick - Condo & Apartment Hunting Tracker".
+  - Updated branding in sidebar (`components/dashboard/sidebar.tsx`) and floating panel (`components/dashboard/maps-panel.tsx`).
+  - Updated LocalStorage persistence key in `store/maps-store.ts` to `nestpick-store-v1`.
+
+---
+
 ## [0.1.0] - 2026-09-07
 
 ### Initial Release: Modern Maps Condo & Apartment Hunting Tracker

@@ -57,7 +57,7 @@ interface MapsPanelProps {
 
 const panelConfig = {
   all: {
-    title: "Condo Hunting",
+    title: "NestPick",
     emptyIcon: Building2,
     emptyTitle: "No listings found",
     emptyDescription: "Try adjusting your search or filters, or add a new place.",

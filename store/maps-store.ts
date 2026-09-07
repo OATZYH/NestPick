@@ -479,7 +479,7 @@ export const useMapsStore = create<MapsState>()(
       },
     }),
     {
-      name: "condo-hunting-store-v1",
+      name: "nestpick-store-v1",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         listings: state.listings,

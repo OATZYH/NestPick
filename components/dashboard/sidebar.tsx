@@ -95,7 +95,7 @@ export function LocationsSidebar({
                 <Building2 className="size-4" />
               </div>
               <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-                <span className="text-sm font-semibold">Condo Hunting</span>
+                <span className="text-sm font-semibold">NestPick</span>
                 <ChevronsUpDown className="size-3 text-muted-foreground" />
               </div>
             </button>
@@ -263,7 +263,7 @@ export function LocationsSidebar({
           </div>
 
           <p className="text-center text-[10px] text-muted-foreground">
-            Condo Hunting Tracker • Next.js 16
+            NestPick • Condo Tracker
           </p>
         </div>
       </SidebarFooter>

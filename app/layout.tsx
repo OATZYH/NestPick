@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Maps - Square UI",
-  description: "A beautiful map explorer with interactive maps by Square UI",
+  title: "NestPick - Condo & Apartment Hunting Tracker",
+  description:
+    "Track, compare, and visualize rental apartments and condos with interactive maps, lease terms, and pricing.",
 };
 
 export default function RootLayout({
