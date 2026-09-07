@@ -10,7 +10,29 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Info,
+  Check,
+  Dumbbell,
+  Waves,
+  Car,
+  ShieldCheck,
+  KeyRound,
+  ArrowUpDown,
+} from "lucide-react";
 import { useMapsStore } from "@/store/maps-store";
 import {
   Listing,
@@ -18,11 +40,42 @@ import {
   PipelineStatus,
 } from "@/types/hunting";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
+import { cn } from "@/lib/utils";
 
 interface ListingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialListing?: Listing | null;
+}
+
+function SectionHeader({
+  title,
+  tooltip,
+}: {
+  title: string;
+  tooltip: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 pb-1.5 border-b">
+      <h4 className="font-semibold text-xs uppercase tracking-wider text-foreground/80">
+        {title}
+      </h4>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded cursor-help"
+            aria-label={`Info about ${title}`}
+          >
+            <Info className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
 }
 
 export function ListingModal({
@@ -210,294 +263,331 @@ export function ListingModal({
     onOpenChange(false);
   };
 
+  const amenitiesList = [
+    { label: "Elevator", val: elevator, set: setElevator, icon: ArrowUpDown },
+    { label: "Gym / Fitness", val: gym, set: setGym, icon: Dumbbell },
+    { label: "Swimming Pool", val: pool, set: setPool, icon: Waves },
+    { label: "Parking Space", val: parking, set: setParking, icon: Car },
+    { label: "CCTV 24h", val: cctv, set: setCctv, icon: ShieldCheck },
+    { label: "Keycard Access", val: keycard, set: setKeycard, icon: KeyRound },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="sm:max-w-4xl lg:max-w-5xl max-h-[90vh] overflow-y-auto p-6">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="text-lg font-bold">
             {initialListing ? "Edit Listing Details" : "Record New Rental Listing"}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 text-sm">
-          {/* Basic Info */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              1. Property Info
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  Project / Property Name *
-                </label>
-                <Input
-                  required
-                  placeholder="e.g. Life Asoke Hype"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+        <TooltipProvider delayDuration={200}>
+          <form onSubmit={handleSubmit} className="space-y-6 text-sm">
+            {/* 2-Column Responsive Grid on PC */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Left Column: Property Info & Financials */}
+              <div className="space-y-5">
+                {/* Property Info */}
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Property Info"
+                    tooltip="Core physical specifications, building name, unit size, floor level, view, and geolocation coordinates."
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">
+                        Project / Property Name *
+                      </label>
+                      <Input
+                        required
+                        placeholder="e.g. Life Asoke Hype"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Property Type</label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {propertyTypes.map((pt) => (
+                          <Button
+                            key={pt.id}
+                            type="button"
+                            size="sm"
+                            variant={type === pt.id ? "default" : "outline"}
+                            className="h-8 text-xs capitalize"
+                            onClick={() => setType(pt.id)}
+                          >
+                            {pt.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Address / Soi</label>
+                    <Input
+                      placeholder="e.g. Sukhumvit Soi 21, Asoke, Bangkok"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Size (sqm)</label>
+                      <Input
+                        type="number"
+                        value={sizeSqm}
+                        onChange={(e) => setSizeSqm(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Floor</label>
+                      <Input
+                        type="number"
+                        value={floor}
+                        onChange={(e) => setFloor(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Latitude</label>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        value={lat}
+                        onChange={(e) => setLat(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Longitude</label>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        value={lng}
+                        onChange={(e) => setLng(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1">View / Exposure</label>
+                    <Input
+                      placeholder="e.g. Unblocked city view, Pool view"
+                      value={view}
+                      onChange={(e) => setView(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing & Terms */}
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Pricing & Terms (฿)"
+                    tooltip="Monthly rental fee, security deposit, advance rent, common maintenance fee, and utility billing rates."
+                  />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Monthly Rent (฿)</label>
+                      <Input
+                        type="number"
+                        value={rent}
+                        onChange={(e) => setRent(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Deposit (฿)</label>
+                      <Input
+                        type="number"
+                        value={deposit}
+                        onChange={(e) => setDeposit(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Advance (฿)</label>
+                      <Input
+                        type="number"
+                        value={advance}
+                        onChange={(e) => setAdvance(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Common Area Fee</label>
+                      <Input
+                        type="number"
+                        placeholder="0 if included"
+                        value={commonFee}
+                        onChange={(e) => setCommonFee(Number(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Water Rate</label>
+                      <Input
+                        placeholder="e.g. 18 ฿/unit"
+                        value={waterRate}
+                        onChange={(e) => setWaterRate(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Electricity Rate</label>
+                      <Input
+                        placeholder="e.g. MEA Rate / 7 ฿/unit"
+                        value={electricRate}
+                        onChange={(e) => setElectricRate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Property Type</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {propertyTypes.map((pt) => (
-                    <Button
-                      key={pt.id}
-                      type="button"
-                      size="sm"
-                      variant={type === pt.id ? "default" : "outline"}
-                      className="h-8 text-xs capitalize"
-                      onClick={() => setType(pt.id)}
+
+              {/* Right Column: Status, Amenities, Contacts, Notes */}
+              <div className="space-y-5">
+                {/* Pipeline Status as Dropdown Select */}
+                <div className="space-y-2.5">
+                  <SectionHeader
+                    title="Pipeline Status"
+                    tooltip="Current stage in your condo hunting journey from initial bookmark to viewing and signing."
+                  />
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Hunting Stage</label>
+                    <Select
+                      value={status}
+                      onValueChange={(val) => setStatus(val as PipelineStatus)}
                     >
-                      {pt.name}
-                    </Button>
-                  ))}
+                      <SelectTrigger className="w-full h-9">
+                        <SelectValue placeholder="Select pipeline stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipelineStatuses.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="size-2 rounded-full shrink-0"
+                                style={{ backgroundColor: s.color }}
+                              />
+                              <span className="font-medium text-xs">{s.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Project Amenities - Fits Text Flexibly */}
+                <div className="space-y-2.5">
+                  <SectionHeader
+                    title="Project Amenities"
+                    tooltip="Available shared facilities, building security, access methods, and parking amenities."
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {amenitiesList.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Button
+                          key={item.label}
+                          type="button"
+                          variant={item.val ? "default" : "outline"}
+                          size="sm"
+                          className={cn(
+                            "h-8 text-xs gap-1.5 font-medium transition-all",
+                            item.val
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground bg-background"
+                          )}
+                          onClick={() => item.set(!item.val)}
+                        >
+                          <Icon className="size-3.5 shrink-0" />
+                          <span>{item.label}</span>
+                          {item.val && <Check className="size-3 shrink-0 ml-0.5" />}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Contacts & Source */}
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Contacts & Source"
+                    tooltip="Origin link for the property listing, plus phone and LINE ID for the agent or landlord."
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Source URL</label>
+                      <Input
+                        placeholder="https://ddproperty.com/..."
+                        value={sourceUrl}
+                        onChange={(e) => setSourceUrl(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Contact Phone</label>
+                      <Input
+                        placeholder="08x-xxx-xxxx"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">LINE ID</label>
+                      <Input
+                        placeholder="@agent_id"
+                        value={contactLine}
+                        onChange={(e) => setContactLine(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Photos & Inspection Notes */}
+                <div className="space-y-3">
+                  <SectionHeader
+                    title="Photos & Inspection Notes"
+                    tooltip="Photo gallery URLs and qualitative personal observations on ventilation, noise, natural lighting, or smells."
+                  />
+                  <div>
+                    <label className="block text-xs font-medium mb-1">
+                      Photo URLs (one per line)
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="https://..."
+                      value={photosStr}
+                      onChange={(e) => setPhotosStr(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">
+                      Personal Notes (pros, cons, noise, smell)
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Aircon condition, street noise, water pressure, sunlight..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium mb-1">Address / Soi</label>
-              <Input
-                placeholder="e.g. Sukhumvit Soi 21, Asoke, Bangkok"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div>
-                <label className="block text-xs font-medium mb-1">Size (sqm)</label>
-                <Input
-                  type="number"
-                  value={sizeSqm}
-                  onChange={(e) => setSizeSqm(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Floor</label>
-                <Input
-                  type="number"
-                  value={floor}
-                  onChange={(e) => setFloor(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Latitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={lat}
-                  onChange={(e) => setLat(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Longitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={lng}
-                  onChange={(e) => setLng(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium mb-1">View / Exposure</label>
-              <Input
-                placeholder="e.g. Unblocked city view, Pool view"
-                value={view}
-                onChange={(e) => setView(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Pipeline Status */}
-          <div className="space-y-2">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              2. Pipeline Status
-            </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {pipelineStatuses.map((s) => (
-                <Badge
-                  key={s.id}
-                  variant="outline"
-                  className={`cursor-pointer px-2.5 py-1 text-xs transition-all ${
-                    status === s.id
-                      ? `${s.badgeClass} ring-2 ring-primary font-semibold`
-                      : "opacity-60 hover:opacity-100"
-                  }`}
-                  onClick={() => setStatus(s.id)}
-                >
-                  {s.name}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* Pricing & Costs */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              3. Pricing & Terms (฿)
-            </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Monthly Rent (฿)</label>
-                <Input
-                  type="number"
-                  value={rent}
-                  onChange={(e) => setRent(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Deposit (฿)</label>
-                <Input
-                  type="number"
-                  value={deposit}
-                  onChange={(e) => setDeposit(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Advance (฿)</label>
-                <Input
-                  type="number"
-                  value={advance}
-                  onChange={(e) => setAdvance(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Common Area Fee</label>
-                <Input
-                  type="number"
-                  placeholder="0 if included"
-                  value={commonFee}
-                  onChange={(e) => setCommonFee(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Water Rate</label>
-                <Input
-                  placeholder="e.g. 18 ฿/unit"
-                  value={waterRate}
-                  onChange={(e) => setWaterRate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Electricity Rate</label>
-                <Input
-                  placeholder="e.g. MEA Rate / 7 ฿/unit"
-                  value={electricRate}
-                  onChange={(e) => setElectricRate(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Amenities */}
-          <div className="space-y-2">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              4. Project Amenities
-            </h4>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {[
-                { label: "Elevator", val: elevator, set: setElevator },
-                { label: "Gym / Fitness", val: gym, set: setGym },
-                { label: "Swimming Pool", val: pool, set: setPool },
-                { label: "Parking Space", val: parking, set: setParking },
-                { label: "CCTV 24h", val: cctv, set: setCctv },
-                { label: "Keycard Access", val: keycard, set: setKeycard },
-              ].map((item) => (
-                <Button
-                  key={item.label}
-                  type="button"
-                  variant={item.val ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs w-full"
-                  onClick={() => item.set(!item.val)}
-                >
-                  {item.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Contact & Links */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              5. Contacts & Source
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Source URL</label>
-                <Input
-                  placeholder="https://ddproperty.com/..."
-                  value={sourceUrl}
-                  onChange={(e) => setSourceUrl(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Contact Phone</label>
-                <Input
-                  placeholder="08x-xxx-xxxx"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">LINE ID</label>
-                <Input
-                  placeholder="@agent_id"
-                  value={contactLine}
-                  onChange={(e) => setContactLine(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Notes & Photos */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              6. Photos & Inspection Notes
-            </h4>
-            <div>
-              <label className="block text-xs font-medium mb-1">
-                Photo URLs (one per line)
-              </label>
-              <textarea
-                rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="https://..."
-                value={photosStr}
-                onChange={(e) => setPhotosStr(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">
-                Personal Notes (pros, cons, noise, smell)
-              </label>
-              <textarea
-                rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Aircon condition, street noise, water pressure, sunlight..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit">
-              {initialListing ? "Save Changes" : "Create Listing"}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter className="pt-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                {initialListing ? "Save Changes" : "Create Listing"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   );

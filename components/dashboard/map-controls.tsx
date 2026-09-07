@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useMapsStore } from "@/store/maps-store";
 import { cn } from "@/lib/utils";
 
@@ -137,6 +138,7 @@ export function MapControls() {
   return (
     <>
       <div className="absolute top-4 right-4 z-10 flex flex-col sm:flex-row items-center gap-2">
+        <SidebarTrigger className="sm:hidden bg-background! size-11 shadow-lg" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

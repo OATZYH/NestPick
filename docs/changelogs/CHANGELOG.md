@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-09-08
+
+### Added
+- **Listing Modal 2-Column Responsive Layout (`components/dashboard/listing-modal.tsx`)**:
+  - Expanded dialog container to wider responsive breakpoints (`sm:max-w-4xl lg:max-w-5xl`).
+  - Organized form sections into a 2-column grid on desktop (`lg:grid-cols-2 gap-6`): Property Info & Financials on the left, Pipeline Status, Amenities, Contacts, and Inspection Notes on the right.
+  - Added interactive section headers with tooltips (`Tooltip`, `TooltipTrigger`, `TooltipContent`) explaining each category.
+  - Added shadcn `Select` component (`components/ui/select.tsx`) powered by `@radix-ui/react-select`.
+- **Maps Panel Show/Hide Toggle (`components/dashboard/maps-panel.tsx`, `store/maps-store.ts`)**:
+  - Added `togglePanelVisible` action to Zustand maps store.
+  - Enabled manual collapse and restoration of the floating maps panel on both desktop and mobile.
+  - Added floating restore button with listing count badge (`PanelLeftOpen`) when panel is closed.
+- **Mobile Sidebar Trigger (`components/dashboard/map-controls.tsx`)**:
+  - Added mobile-only trigger button (`sm:hidden`) in top-right map controls to open the navigation drawer sheet on smaller screens.
+
+### Changed & Fixed
+- **Sidebar Header & Collapse Behavior (`components/dashboard/sidebar.tsx`)**:
+  - Replaced redundant dropdown menu on the logo with a plain branding logo link.
+  - Fixed sidebar toggle button alignment and spacing in `SidebarHeader`.
+  - Switched sidebar collapse mode from `offcanvas` to `icon`, preserving a 48px navigation rail when collapsed instead of disappearing off-screen.
+  - Added centered trigger button in the icon rail and hover tooltips for all navigation items.
+- **Listing Modal UI Fixes (`components/dashboard/listing-modal.tsx`)**:
+  - Converted pipeline status selection from badge chips into a clean `<Select>` dropdown with color status indicators.
+  - Removed numeric prefixes (`1. `, `2. `, etc.) from all modal section titles.
+  - Fixed Project Amenities component by replacing rigid 6-column fixed grid with `flex flex-wrap gap-2` chips with Lucide icons and active check indicators, preventing label truncation.
+
+---
+
 ## [0.2.0] - 2026-09-07
 
 ### Added

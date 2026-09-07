@@ -14,20 +14,13 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
+  SidebarRail,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Building2,
   Heart,
   Clock,
-  Settings,
-  ChevronsUpDown,
   Home,
   GraduationCap,
   Building,
@@ -86,46 +79,25 @@ export function LocationsSidebar({
   };
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="px-2.5 py-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2.5 w-full hover:bg-sidebar-accent rounded-md p-1 -m-1 transition-colors shrink-0">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-blue-600 text-white shrink-0">
-                <Building2 className="size-4" />
-              </div>
-              <div className="flex items-center gap-1 group-data-[collapsible=icon]:hidden">
-                <span className="text-sm font-semibold">NestPick</span>
-                <ChevronsUpDown className="size-3 text-muted-foreground" />
-              </div>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuItem asChild>
-              <Link href="/" className="flex items-center gap-2">
-                <MapPin className="size-4" />
-                <span>Map Dashboard</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/table" className="flex items-center gap-2">
-                <Table className="size-4" />
-                <span>Table View</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/compare" className="flex items-center gap-2">
-                <Scale className="size-4" />
-                <span>Compare Listings</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-muted-foreground">
-              <Settings className="size-4" />
-              <span>Settings</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader className="px-3 py-3 border-b">
+        <div className="flex items-center justify-between w-full group-data-[collapsible=icon]:hidden">
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 min-w-0 hover:opacity-85 transition-opacity"
+          >
+            <div className="flex size-7 items-center justify-center rounded-lg bg-blue-600 text-white shrink-0 shadow-xs">
+              <Building2 className="size-4" />
+            </div>
+            <span className="text-sm font-semibold tracking-tight truncate">
+              NestPick
+            </span>
+          </Link>
+          <SidebarTrigger className="size-7 shrink-0 text-muted-foreground hover:text-foreground" />
+        </div>
+        <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center w-full">
+          <SidebarTrigger className="size-7 text-muted-foreground hover:text-foreground" />
+        </div>
       </SidebarHeader>
 
       <SidebarContent className="px-2.5">
@@ -142,7 +114,7 @@ export function LocationsSidebar({
 
                 return (
                   <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton asChild isActive={isActive} className="h-8">
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className="h-8">
                       <Link href={item.href}>
                         <item.icon className="size-4" />
                         <span className="text-sm">{item.title}</span>
@@ -159,7 +131,7 @@ export function LocationsSidebar({
         </SidebarGroup>
 
         {/* Property Types */}
-        <SidebarGroup className="p-0 mt-4">
+        <SidebarGroup className="p-0 mt-4 group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel className="px-0 h-6">
             <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
               Property Types
@@ -204,7 +176,7 @@ export function LocationsSidebar({
         </SidebarGroup>
 
         {/* Pipeline Tracking Status */}
-        <SidebarGroup className="p-0 mt-4">
+        <SidebarGroup className="p-0 mt-4 group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel className="px-0 h-6">
             <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
               Pipeline Stage
@@ -267,6 +239,7 @@ export function LocationsSidebar({
           </p>
         </div>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

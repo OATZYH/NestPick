@@ -29,6 +29,8 @@ import {
   Edit2,
   Trash2,
   Scale,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,9 +45,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMapsStore, formatDistance, getLatestRent, getLatestDeposit } from "@/store/maps-store";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
 import { Listing, PipelineStatus } from "@/types/hunting";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { useMediaQuery } from "usehooks-ts";
 import { ListingModal } from "./listing-modal";
 import { CenterPointModal } from "./center-point-modal";
 
@@ -126,14 +126,6 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
     updateListing,
     toggleCompareListing,
   } = useMapsStore();
-
-  const isDesktop = useMediaQuery("(min-width: 640px)");
-
-  React.useEffect(() => {
-    if (isDesktop && !isPanelVisible) {
-      setPanelVisible(true);
-    }
-  }, [isDesktop, isPanelVisible, setPanelVisible]);
 
   const activeCenterPoint = getActiveCenterPoint();
 
@@ -231,11 +223,16 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
     return (
       <Button
         variant="outline"
-        size="icon"
-        className="absolute left-4 top-4 z-20 sm:hidden size-10 bg-background! shadow-xl"
+        size="sm"
+        className="absolute left-4 top-4 z-20 h-9 px-3 bg-background/95 backdrop-blur-xs shadow-xl border rounded-xl flex items-center gap-2 text-xs font-medium hover:bg-accent transition-all cursor-pointer"
         onClick={() => setPanelVisible(true)}
+        title={`Show ${config.title}`}
       >
-        <Building2 className="size-5" />
+        <PanelLeftOpen className="size-4 text-blue-600 dark:text-blue-400" />
+        <span className="hidden sm:inline">Show {config.title}</span>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold">
+          {listings.length}
+        </Badge>
       </Button>
     );
   }
@@ -267,14 +264,14 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
               <Plus className="size-3.5" />
               <span>Add</span>
             </Button>
-            <SidebarTrigger className="size-7" />
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 sm:hidden"
+              className="size-7"
               onClick={() => setPanelVisible(false)}
+              title="Hide panel"
             >
-              <X className="size-4" />
+              <PanelLeftClose className="size-4" />
             </Button>
           </div>
         </div>

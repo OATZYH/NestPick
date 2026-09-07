@@ -121,6 +121,7 @@ interface MapsState {
   setRouteDestination: (listingId: string | null) => void;
   clearRoute: () => void;
   setPanelVisible: (visible: boolean) => void;
+  togglePanelVisible: () => void;
 
   // Selectors
   getActiveCenterPoint: () => CenterPoint | undefined;
@@ -347,6 +348,7 @@ export const useMapsStore = create<MapsState>()(
       clearRoute: () => set({ routeDestinationId: null }),
 
       setPanelVisible: (visible) => set({ isPanelVisible: visible }),
+      togglePanelVisible: () => set((state) => ({ isPanelVisible: !state.isPanelVisible })),
 
       // Selectors
       getActiveCenterPoint: () => {
