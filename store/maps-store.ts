@@ -9,10 +9,6 @@ import {
   PropertyType,
   PipelineStatus,
 } from "@/types/hunting";
-import {
-  initialListings,
-  initialCenterPoints,
-} from "@/mock-data/condos";
 
 export type ViewMode = "map" | "table" | "compare";
 export type SortBy =
@@ -85,6 +81,7 @@ interface MapsState {
   userLocation: { lat: number; lng: number } | null;
   routeDestinationId: string | null;
   isPanelVisible: boolean;
+  isLoading: boolean;
 
   // Interactive Map Placement & Modals
   isPickingOnMap: boolean;
@@ -94,32 +91,35 @@ interface MapsState {
   editingListing: Listing | null;
   isCenterPointModalOpen: boolean;
 
+  // Data Loading & Sync
+  fetchInitialData: () => Promise<void>;
+
   // Actions
   setSelectedCategory: (category: string) => void;
   setSelectedStatus: (status: string) => void;
   setSearchQuery: (query: string) => void;
   setViewMode: (mode: ViewMode) => void;
   setSortBy: (sort: SortBy) => void;
-  toggleFavorite: (listingId: string) => void;
+  toggleFavorite: (listingId: string) => Promise<void>;
   selectListing: (listingId: string | null) => void;
   setActiveCenterPoint: (centerPointId: string) => void;
-  addCenterPoint: (centerPoint: Omit<CenterPoint, "id">) => void;
-  deleteCenterPoint: (centerPointId: string) => void;
-  addListing: (listingData: Omit<Listing, "id" | "created_at">) => void;
-  updateListing: (id: string, updates: Partial<Listing>) => void;
-  deleteListing: (id: string) => void;
+  addCenterPoint: (centerPoint: Omit<CenterPoint, "id">) => Promise<void>;
+  deleteCenterPoint: (centerPointId: string) => Promise<void>;
+  addListing: (listingData: Omit<Listing, "id" | "created_at">) => Promise<void>;
+  updateListing: (id: string, updates: Partial<Listing>) => Promise<void>;
+  deleteListing: (id: string) => Promise<void>;
   addPriceHistory: (
     listingId: string,
     entry: Omit<PriceHistory, "id" | "listing_id" | "recorded_at"> & { recorded_at?: string }
-  ) => void;
+  ) => Promise<void>;
   addViewingLog: (
     listingId: string,
     log: Omit<ViewingLog, "id" | "listing_id">
-  ) => void;
+  ) => Promise<void>;
   updateContract: (
     listingId: string,
     contract: Omit<Contract, "id" | "listing_id">
-  ) => void;
+  ) => Promise<void>;
   toggleCompareListing: (listingId: string) => void;
   clearCompareListings: () => void;
   setMapCenter: (center: { lat: number; lng: number }) => void;
@@ -156,22 +156,23 @@ interface MapsState {
 export const useMapsStore = create<MapsState>()(
   persist(
     (set, get) => ({
-      listings: initialListings,
-      centerPoints: initialCenterPoints,
-      activeCenterPointId: "cp-workplace",
+      listings: [],
+      centerPoints: [],
+      activeCenterPointId: "",
       selectedCategory: "all",
       selectedStatus: "all",
       searchQuery: "",
       viewMode: "map",
       sortBy: "nearest",
       selectedListingId: null,
-      compareListingIds: ["condo-1", "condo-2"],
+      compareListingIds: [],
       mapCenter: { lat: 13.745, lng: 100.54 }, // Bangkok City Center
       mapZoom: 12.5,
       mapStyle: "default",
       userLocation: null,
       routeDestinationId: null,
       isPanelVisible: true,
+      isLoading: true,
 
       // Ephemeral picking & modal states
       isPickingOnMap: false,
@@ -180,6 +181,44 @@ export const useMapsStore = create<MapsState>()(
       isListingModalOpen: false,
       editingListing: null,
       isCenterPointModalOpen: false,
+
+      fetchInitialData: async () => {
+        set({ isLoading: true });
+        try {
+          const [resListings, resCenterPoints] = await Promise.all([
+            fetch("/api/listings"),
+            fetch("/api/center-points"),
+          ]);
+
+          let listings: Listing[] = [];
+          let centerPoints: CenterPoint[] = [];
+
+          if (resListings.ok) {
+            listings = await resListings.json();
+          }
+          if (resCenterPoints.ok) {
+            centerPoints = await resCenterPoints.json();
+          }
+
+          set((state) => {
+            const activeId =
+              state.activeCenterPointId &&
+              centerPoints.some((c) => c.id === state.activeCenterPointId)
+                ? state.activeCenterPointId
+                : centerPoints[0]?.id || "";
+
+            return {
+              listings,
+              centerPoints,
+              activeCenterPointId: activeId,
+              isLoading: false,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to fetch listings or center points:", err);
+          set({ isLoading: false });
+        }
+      },
 
       setSelectedCategory: (categoryId) => {
         set({ selectedCategory: categoryId });
@@ -195,16 +234,30 @@ export const useMapsStore = create<MapsState>()(
 
       setSortBy: (sort) => set({ sortBy: sort }),
 
-      toggleFavorite: (listingId) =>
+      toggleFavorite: async (listingId) => {
+        const listing = get().listings.find((l) => l.id === listingId);
+        if (!listing) return;
+        const nextFavorite = !listing.is_favorite;
+
         set((state) => ({
           listings: state.listings.map((l) =>
-            l.id === listingId ? { ...l, is_favorite: !l.is_favorite } : l
+            l.id === listingId ? { ...l, is_favorite: nextFavorite } : l
           ),
-        })),
+        }));
+
+        try {
+          await fetch(`/api/listings/${listingId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_favorite: nextFavorite }),
+          });
+        } catch (e) {
+          console.error("Failed to sync toggleFavorite:", e);
+        }
+      },
 
       selectListing: (listingId) => {
         const state = get();
-        // If passing null, undefined, or clicking the already selected listing -> toggle off / deselect
         if (!listingId || state.selectedListingId === listingId) {
           set({ selectedListingId: null, routeDestinationId: null });
           return;
@@ -226,19 +279,40 @@ export const useMapsStore = create<MapsState>()(
         }
       },
 
-      addCenterPoint: (cpData) =>
-        set((state) => {
-          const newCp: CenterPoint = {
-            ...cpData,
-            id: `cp-${Date.now()}`,
-          };
-          return {
-            centerPoints: [...state.centerPoints, newCp],
-            activeCenterPointId: newCp.id,
-          };
-        }),
+      addCenterPoint: async (cpData) => {
+        const tempId = `cp-${Date.now()}`;
+        const newCp: CenterPoint = {
+          ...cpData,
+          id: tempId,
+        };
 
-      deleteCenterPoint: (id) =>
+        set((state) => ({
+          centerPoints: [...state.centerPoints, newCp],
+          activeCenterPointId: newCp.id,
+        }));
+
+        try {
+          const res = await fetch("/api/center-points", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newCp),
+          });
+          if (res.ok) {
+            const saved: CenterPoint = await res.json();
+            set((state) => ({
+              centerPoints: state.centerPoints.map((c) =>
+                c.id === tempId ? saved : c
+              ),
+              activeCenterPointId:
+                state.activeCenterPointId === tempId ? saved.id : state.activeCenterPointId,
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to persist center point:", e);
+        }
+      },
+
+      deleteCenterPoint: async (id) => {
         set((state) => {
           const remaining = state.centerPoints.filter((c) => c.id !== id);
           return {
@@ -248,30 +322,75 @@ export const useMapsStore = create<MapsState>()(
                 ? remaining[0]?.id || ""
                 : state.activeCenterPointId,
           };
-        }),
+        });
 
-      addListing: (data) =>
-        set((state) => {
-          const newListing: Listing = {
-            ...data,
-            id: `listing-${Date.now()}`,
-            created_at: new Date().toISOString(),
-          };
-          return {
-            listings: [newListing, ...state.listings],
-            selectedListingId: newListing.id,
-            mapCenter: { lat: newListing.lat, lng: newListing.lng },
-          };
-        }),
+        try {
+          await fetch(`/api/center-points/${id}`, { method: "DELETE" });
+        } catch (e) {
+          console.error("Failed to delete center point:", e);
+        }
+      },
 
-      updateListing: (id, updates) =>
+      addListing: async (data) => {
+        const tempId = `condo-${Date.now()}`;
+        const newListing: Listing = {
+          ...data,
+          id: tempId,
+          created_at: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          listings: [newListing, ...state.listings],
+          selectedListingId: newListing.id,
+          mapCenter: { lat: newListing.lat, lng: newListing.lng },
+        }));
+
+        try {
+          const res = await fetch("/api/listings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newListing),
+          });
+          if (res.ok) {
+            const saved: Listing = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) =>
+                l.id === tempId ? saved : l
+              ),
+              selectedListingId:
+                state.selectedListingId === tempId ? saved.id : state.selectedListingId,
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to persist listing:", e);
+        }
+      },
+
+      updateListing: async (id, updates) => {
         set((state) => ({
           listings: state.listings.map((l) =>
             l.id === id ? { ...l, ...updates } : l
           ),
-        })),
+        }));
 
-      deleteListing: (id) =>
+        try {
+          const res = await fetch(`/api/listings/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
+          if (res.ok) {
+            const saved: Listing = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) => (l.id === id ? saved : l)),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to update listing:", e);
+        }
+      },
+
+      deleteListing: async (id) => {
         set((state) => ({
           listings: state.listings.filter((l) => l.id !== id),
           selectedListingId:
@@ -279,62 +398,137 @@ export const useMapsStore = create<MapsState>()(
           compareListingIds: state.compareListingIds.filter((cid) => cid !== id),
           routeDestinationId:
             state.routeDestinationId === id ? null : state.routeDestinationId,
-        })),
+        }));
 
-      addPriceHistory: (listingId, entry) =>
-        set((state) => {
-          return {
-            listings: state.listings.map((l) => {
-              if (l.id !== listingId) return l;
-              const newEntry: PriceHistory = {
-                ...entry,
-                id: `ph-${Date.now()}`,
-                listing_id: listingId,
-                recorded_at: entry.recorded_at || new Date().toISOString(),
-              };
-              return {
-                ...l,
-                price_history: [...(l.price_history || []), newEntry],
-              };
-            }),
-          };
-        }),
+        try {
+          await fetch(`/api/listings/${id}`, { method: "DELETE" });
+        } catch (e) {
+          console.error("Failed to delete listing:", e);
+        }
+      },
 
-      addViewingLog: (listingId, log) =>
-        set((state) => {
-          return {
-            listings: state.listings.map((l) => {
-              if (l.id !== listingId) return l;
-              const newLog: ViewingLog = {
-                ...log,
-                id: `vl-${Date.now()}`,
-                listing_id: listingId,
-              };
-              return {
-                ...l,
-                viewing_logs: [...(l.viewing_logs || []), newLog],
-              };
-            }),
-          };
-        }),
+      addPriceHistory: async (listingId, entry) => {
+        const tempId = `ph-${Date.now()}`;
+        const newEntry: PriceHistory = {
+          ...entry,
+          id: tempId,
+          listing_id: listingId,
+          recorded_at: entry.recorded_at || new Date().toISOString(),
+        };
 
-      updateContract: (listingId, contract) =>
-        set((state) => {
-          return {
-            listings: state.listings.map((l) => {
-              if (l.id !== listingId) return l;
-              const newContract: Contract = {
-                ...contract,
-                id: l.contract?.id || `contract-${Date.now()}`,
-                listing_id: listingId,
-              };
-              return {
-                ...l,
-                contract: newContract,
-              };
-            }),
-          };
-        }),
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              price_history: [...(l.price_history || []), newEntry],
+            };
+          }),
+        }));
+
+        try {
+          const res = await fetch(`/api/listings/${listingId}/price-history`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newEntry),
+          });
+          if (res.ok) {
+            const saved: PriceHistory = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) => {
+                if (l.id !== listingId) return l;
+                return {
+                  ...l,
+                  price_history: (l.price_history || []).map((p) =>
+                    p.id === tempId ? saved : p
+                  ),
+                };
+              }),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to persist price history:", e);
+        }
+      },
+
+      addViewingLog: async (listingId, log) => {
+        const tempId = `vl-${Date.now()}`;
+        const newLog: ViewingLog = {
+          ...log,
+          id: tempId,
+          listing_id: listingId,
+        };
+
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              viewing_logs: [...(l.viewing_logs || []), newLog],
+            };
+          }),
+        }));
+
+        try {
+          const res = await fetch(`/api/listings/${listingId}/viewings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newLog),
+          });
+          if (res.ok) {
+            const saved: ViewingLog = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) => {
+                if (l.id !== listingId) return l;
+                return {
+                  ...l,
+                  viewing_logs: (l.viewing_logs || []).map((v) =>
+                    v.id === tempId ? saved : v
+                  ),
+                };
+              }),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to persist viewing log:", e);
+        }
+      },
+
+      updateContract: async (listingId, contract) => {
+        const newContract: Contract = {
+          ...contract,
+          id: `contract-${listingId}`,
+          listing_id: listingId,
+        };
+
+        set((state) => ({
+          listings: state.listings.map((l) => {
+            if (l.id !== listingId) return l;
+            return {
+              ...l,
+              contract: newContract,
+            };
+          }),
+        }));
+
+        try {
+          const res = await fetch(`/api/listings/${listingId}/contract`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newContract),
+          });
+          if (res.ok) {
+            const saved: Contract = await res.json();
+            set((state) => ({
+              listings: state.listings.map((l) =>
+                l.id === listingId ? { ...l, contract: saved } : l
+              ),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to persist contract:", e);
+        }
+      },
 
       toggleCompareListing: (listingId) =>
         set((state) => {
@@ -347,7 +541,6 @@ export const useMapsStore = create<MapsState>()(
             };
           }
           if (state.compareListingIds.length >= 4) {
-            // max 4 side-by-side
             return {
               compareListingIds: [...state.compareListingIds.slice(1), listingId],
             };
@@ -367,31 +560,28 @@ export const useMapsStore = create<MapsState>()(
 
       setUserLocation: (location) => set({ userLocation: location }),
 
-      setRouteDestination: (destinationId) =>
-        set({ routeDestinationId: destinationId }),
+      setRouteDestination: (listingId) => set({ routeDestinationId: listingId }),
 
       clearRoute: () => set({ routeDestinationId: null }),
 
       setPanelVisible: (visible) => set({ isPanelVisible: visible }),
-      togglePanelVisible: () => set((state) => ({ isPanelVisible: !state.isPanelVisible })),
 
-      // Modal & Map Picking Actions
+      togglePanelVisible: () =>
+        set((state) => ({ isPanelVisible: !state.isPanelVisible })),
+
+      // Interactive Map Picking & Modal Actions
       openAddListing: (coords) =>
         set({
           isListingModalOpen: true,
           editingListing: null,
           pendingCoordinates: coords || null,
-          isPickingOnMap: false,
-          pickingTarget: null,
         }),
 
       openEditListing: (listing) =>
         set({
           isListingModalOpen: true,
           editingListing: listing,
-          pendingCoordinates: { lat: listing.lat, lng: listing.lng },
-          isPickingOnMap: false,
-          pickingTarget: null,
+          pendingCoordinates: null,
         }),
 
       closeListingModal: () =>
@@ -401,19 +591,22 @@ export const useMapsStore = create<MapsState>()(
           pendingCoordinates: null,
         }),
 
-      setIsListingModalOpen: (open) =>
-        set((state) => ({
-          isListingModalOpen: open,
-          editingListing: open ? state.editingListing : null,
-          pendingCoordinates: open ? state.pendingCoordinates : null,
-        })),
+      setIsListingModalOpen: (open) => {
+        if (!open) {
+          set({
+            isListingModalOpen: false,
+            editingListing: null,
+            pendingCoordinates: null,
+          });
+        } else {
+          set({ isListingModalOpen: true });
+        }
+      },
 
       openCenterPointModal: (coords) =>
         set({
           isCenterPointModalOpen: true,
           pendingCoordinates: coords || null,
-          isPickingOnMap: false,
-          pickingTarget: null,
         }),
 
       closeCenterPointModal: () =>
@@ -422,11 +615,16 @@ export const useMapsStore = create<MapsState>()(
           pendingCoordinates: null,
         }),
 
-      setIsCenterPointModalOpen: (open) =>
-        set((state) => ({
-          isCenterPointModalOpen: open,
-          pendingCoordinates: open ? state.pendingCoordinates : null,
-        })),
+      setIsCenterPointModalOpen: (open) => {
+        if (!open) {
+          set({
+            isCenterPointModalOpen: false,
+            pendingCoordinates: null,
+          });
+        } else {
+          set({ isCenterPointModalOpen: true });
+        }
+      },
 
       startMapPicking: (target) =>
         set({
@@ -593,11 +791,9 @@ export const useMapsStore = create<MapsState>()(
       },
     }),
     {
-      name: "nestpick-store-v1",
+      name: "nestpick-store-v2",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        listings: state.listings,
-        centerPoints: state.centerPoints,
         activeCenterPointId: state.activeCenterPointId,
         compareListingIds: state.compareListingIds,
         mapStyle: state.mapStyle,
