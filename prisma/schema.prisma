@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model CenterPoint {
+  id       String  @id
+  name     String
+  lat      Float
+  lng      Float
+  category String
+  icon     String?
+  color    String?
+
+  @@map("center_points")
+}
+
+model PipelineStatus {
+  id          String    @id
+  name        String
+  color       String
+  badge_class String
+  listings    Listing[]
+
+  @@map("pipeline_statuses")
+}
+
+model PropertyType {
+  id       String    @id
+  name     String
+  icon     String
+  color    String
+  listings Listing[]
+
+  @@map("property_types")
+}
+
+model Listing {
+  id             String         @id
+  name           String
+  address        String
+  lat            Float
+  lng            Float
+  type           String
+  size_sqm       Decimal        @db.Decimal
+  floor          Int
+  view           String?
+  source_url     String?
+  contact_phone  String?
+  contact_line   String?
+  status         String
+  is_favorite    Boolean        @default(false)
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  notes          String?
+  amenities      Json           @default("{}")
+  photos         String[]       @default([])
+  contract       Contract?
+  pipelineStatus PipelineStatus @relation(fields: [status], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  propertyType   PropertyType   @relation(fields: [type], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  priceHistory   PriceHistory[]
+  viewingLogs    ViewingLog[]
+
+  @@map("listings")
+}
+
+model PriceHistory {
+  id            String   @id
+  listing_id    String
+  rent          Decimal  @db.Decimal
+  deposit       Decimal  @db.Decimal
+  advance       Decimal  @db.Decimal
+  common_fee    Decimal  @default(0) @db.Decimal
+  parking_fee   Decimal  @default(0) @db.Decimal
+  internet_fee  Decimal  @default(0) @db.Decimal
+  water_type    String
+  water_rate    String?
+  electric_type String
+  electric_rate String?
+  recorded_at   DateTime @db.Timestamptz(6)
+  note          String?
+  listing       Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([listing_id], map: "idx_price_history_listing_id")
+  @@map("price_history")
+}
+
+model Contract {
+  id                        String   @id
+  listing_id                String   @unique
+  start_date                DateTime @db.Date
+  end_date                  DateTime @db.Date
+  duration_months           Int
+  deposit_refund_terms      String?
+  pet_allowed               Boolean  @default(false)
+  smoking_allowed           Boolean  @default(false)
+  guest_allowed             Boolean  @default(false)
+  early_termination_penalty String?
+  contract_file_url         String?
+  listing                   Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("contracts")
+}
+
+model ViewingLog {
+  id           String   @id
+  listing_id   String
+  scheduled_at DateTime @db.Timestamptz(6)
+  notes        String?
+  rating       Decimal? @db.Decimal(2, 1)
+  completed    Boolean  @default(false)
+  listing      Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([listing_id], map: "idx_viewing_logs_listing_id")
+  @@map("viewing_logs")
+}

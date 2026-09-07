@@ -169,7 +169,7 @@ export function MapControls() {
           </DropdownMenuContent>
         </DropdownMenu>
         <ThemeToggle className="bg-background! size-11 shadow-lg" />
-        <Button
+        {/*<Button
           variant="outline"
           size="icon"
           className="bg-background! size-11 shadow-lg"
@@ -182,7 +182,7 @@ export function MapControls() {
           >
             <Github className="size-4" />
           </Link>
-        </Button>
+        </Button>*/}
       </div>
 
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-09-07
+
+### Added
+- **Prisma ORM 7 Integration**:
+  - Defined PostgreSQL models in `prisma/schema.prisma` (`Listing`, `PriceHistory`, `Contract`, `ViewingLog`, `CenterPoint`, `PropertyType`, `PipelineStatus`) with cascade delete constraints and indexes.
+  - Created singleton database client in `lib/prisma.ts` using `@prisma/adapter-pg` driver adapter with connection pooling and adaptive SSL (disabled for localhost/Docker, enabled for cloud databases).
+  - Added Prisma 7 CLI configuration in `prisma7.config.ts`.
+  - Migrated `scripts/seed.ts` to type-safe Prisma upsert operations.
+- **Docker Compose Local Database**:
+  - Configured PostgreSQL 17 Alpine in `docker-compose.yml` (`nestpick-postgres`) on port `5432` with healthcheck and volume persistence.
+  - Added local `.env.example` template and cleaned cloud credentials from `.env.local` / `.env`.
+- **New NPM Scripts**:
+  - `db:up` and `db:down` for Docker container lifecycle.
+  - `prisma:push`, `prisma:generate`, `prisma:migrate`, `prisma:studio`, `db:seed`, and `postinstall`.
+
+### Removed
+- Removed unused dependencies `ajv` and `@radix-ui/react-scroll-area`.
+
+---
+
 ## [0.1.1] - 2026-09-07
 
 ### Changed
@@ -75,6 +95,6 @@ Transformed the template into a production-ready single-user condo/apartment hun
 - **React 19 Rules & Build Stability**:
   - Resolved `react-hooks/purity` error in `components/ui/sidebar.tsx` by eliminating `Math.random()` inside render.
   - Resolved variable access order in `components/dashboard/map-view.tsx` for `drawRoute`.
-  - Replaced unescaped quotes in `components/dashboard/table-view.tsx`.
+  - Replaced unescaped quotes in `components/dashboard/table-view.tsx``.
 - **Map View Controls (`components/dashboard/map-controls.tsx`)**:
   - Updated default compass/reset view to center onto Bangkok and the active reference target point instead of world coordinates `(20, 0)`.
