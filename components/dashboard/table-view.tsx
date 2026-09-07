@@ -45,8 +45,6 @@ import {
 } from "@/store/maps-store";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
 import { Listing, PipelineStatus } from "@/types/hunting";
-import { ListingModal } from "./listing-modal";
-import { CenterPointModal } from "./center-point-modal";
 import { cn } from "@/lib/utils";
 
 export function TableView() {
@@ -66,11 +64,10 @@ export function TableView() {
     selectListing,
     getDistanceToActiveCenterPoint,
     getActiveCenterPoint,
+    openAddListing,
+    openEditListing,
+    openCenterPointModal,
   } = useMapsStore();
-
-  const [isListingModalOpen, setIsListingModalOpen] = React.useState(false);
-  const [isCenterPointModalOpen, setIsCenterPointModalOpen] = React.useState(false);
-  const [editingListing, setEditingListing] = React.useState<Listing | null>(null);
 
   const activeCenterPoint = getActiveCenterPoint();
   const listings = getFilteredListings();
@@ -105,8 +102,8 @@ export function TableView() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={() => setIsCenterPointModalOpen(true)}
+            className="h-8 text-xs gap-1.5 cursor-pointer"
+            onClick={() => openCenterPointModal()}
           >
             <Target className="size-3.5 text-pink-500" />
             <span className="max-w-[140px] truncate">
@@ -115,7 +112,7 @@ export function TableView() {
           </Button>
 
           {/* Back to Map button */}
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1 cursor-pointer">
             <Link href="/">
               <MapPin className="size-3.5" />
               <span>Map View</span>
@@ -125,10 +122,9 @@ export function TableView() {
           {/* Add Listing Button */}
           <Button
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-8 text-xs gap-1.5 cursor-pointer"
             onClick={() => {
-              setEditingListing(null);
-              setIsListingModalOpen(true);
+              openAddListing();
             }}
           >
             <Plus className="size-3.5" />
@@ -154,7 +150,7 @@ export function TableView() {
           <Button
             variant={selectedCategory === "all" ? "default" : "ghost"}
             size="sm"
-            className="h-7 text-xs px-2"
+            className="h-7 text-xs px-2 cursor-pointer"
             onClick={() => setSelectedCategory("all")}
           >
             All Types
@@ -164,7 +160,7 @@ export function TableView() {
               key={t.id}
               variant={selectedCategory === t.id ? "default" : "ghost"}
               size="sm"
-              className="h-7 text-xs px-2"
+              className="h-7 text-xs px-2 cursor-pointer"
               onClick={() => setSelectedCategory(t.id)}
             >
               {t.name}
@@ -177,7 +173,7 @@ export function TableView() {
           <Button
             variant={selectedStatus === "all" ? "secondary" : "ghost"}
             size="sm"
-            className="h-7 text-xs px-2"
+            className="h-7 text-xs px-2 cursor-pointer"
             onClick={() => setSelectedStatus("all")}
           >
             All Statuses
@@ -187,7 +183,7 @@ export function TableView() {
               key={s.id}
               variant={selectedStatus === s.id ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 text-xs px-2"
+              className="h-7 text-xs px-2 cursor-pointer"
               onClick={() => setSelectedStatus(s.id)}
             >
               <span
@@ -259,7 +255,7 @@ export function TableView() {
                     <td className="p-2 text-center">
                       <button
                         onClick={() => toggleFavorite(listing.id)}
-                        className="hover:scale-125 transition-transform"
+                        className="hover:scale-125 transition-transform cursor-pointer"
                       >
                         <Heart
                           className={cn(
@@ -314,7 +310,7 @@ export function TableView() {
                       </div>
                       {listing.notes && (
                         <div className="text-[10px] text-muted-foreground/80 line-clamp-1 italic mt-0.5">
-                          "{listing.notes}"
+                          &quot;{listing.notes}&quot;
                         </div>
                       )}
                     </td>
@@ -343,7 +339,7 @@ export function TableView() {
                             <DropdownMenuItem
                               key={st.id}
                               onClick={() => handleStatusChange(listing.id, st.id)}
-                              className="gap-2 text-xs"
+                              className="gap-2 text-xs cursor-pointer"
                             >
                               <span
                                 className="size-2 rounded-full"
@@ -386,32 +382,32 @@ export function TableView() {
                     <td className="p-2">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <span
-                          title={listing.amenities.gym ? "Gym available" : "No gym"}
-                          className={listing.amenities.gym ? "text-foreground" : "opacity-20"}
+                          title={listing.amenities?.gym ? "Gym available" : "No gym"}
+                          className={listing.amenities?.gym ? "text-foreground" : "opacity-20"}
                         >
                           <Dumbbell className="size-3.5" />
                         </span>
                         <span
-                          title={listing.amenities.pool ? "Pool available" : "No pool"}
-                          className={listing.amenities.pool ? "text-foreground" : "opacity-20"}
+                          title={listing.amenities?.pool ? "Pool available" : "No pool"}
+                          className={listing.amenities?.pool ? "text-foreground" : "opacity-20"}
                         >
                           <Waves className="size-3.5" />
                         </span>
                         <span
-                          title={listing.amenities.parking ? "Parking available" : "No parking"}
-                          className={listing.amenities.parking ? "text-foreground" : "opacity-20"}
+                          title={listing.amenities?.parking ? "Parking available" : "No parking"}
+                          className={listing.amenities?.parking ? "text-foreground" : "opacity-20"}
                         >
                           <Car className="size-3.5" />
                         </span>
                         <span
-                          title={listing.amenities.cctv ? "24h CCTV" : "No CCTV"}
-                          className={listing.amenities.cctv ? "text-foreground" : "opacity-20"}
+                          title={listing.amenities?.cctv ? "24h CCTV" : "No CCTV"}
+                          className={listing.amenities?.cctv ? "text-foreground" : "opacity-20"}
                         >
                           <ShieldCheck className="size-3.5" />
                         </span>
                         <span
-                          title={listing.amenities.keycard ? "Keycard Access" : "No Keycard"}
-                          className={listing.amenities.keycard ? "text-foreground" : "opacity-20"}
+                          title={listing.amenities?.keycard ? "Keycard Access" : "No Keycard"}
+                          className={listing.amenities?.keycard ? "text-foreground" : "opacity-20"}
                         >
                           <KeyRound className="size-3.5" />
                         </span>
@@ -450,17 +446,16 @@ export function TableView() {
                         <button
                           title="View on Map"
                           onClick={() => handleOpenOnMap(listing.id)}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary cursor-pointer"
                         >
                           <ArrowUpRight className="size-3.5" />
                         </button>
                         <button
                           title="Edit details"
                           onClick={() => {
-                            setEditingListing(listing);
-                            setIsListingModalOpen(true);
+                            openEditListing(listing);
                           }}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
                         >
                           <Edit2 className="size-3.5" />
                         </button>
@@ -471,7 +466,7 @@ export function TableView() {
                               deleteListing(listing.id);
                             }
                           }}
-                          className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive cursor-pointer"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
@@ -484,19 +479,6 @@ export function TableView() {
           </tbody>
         </table>
       </div>
-
-      {/* Listing Create/Edit Modal */}
-      <ListingModal
-        open={isListingModalOpen}
-        onOpenChange={setIsListingModalOpen}
-        initialListing={editingListing}
-      />
-
-      {/* Reference Center Point Modal */}
-      <CenterPointModal
-        open={isCenterPointModalOpen}
-        onOpenChange={setIsCenterPointModalOpen}
-      />
     </div>
   );
 }

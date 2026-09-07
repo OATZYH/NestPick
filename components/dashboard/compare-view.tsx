@@ -22,7 +22,6 @@ import {
   getLatestDeposit,
 } from "@/store/maps-store";
 import { pipelineStatuses } from "@/mock-data/condos";
-import { CenterPointModal } from "./center-point-modal";
 import { cn } from "@/lib/utils";
 
 export function CompareView() {
@@ -34,9 +33,8 @@ export function CompareView() {
     getDistanceToActiveCenterPoint,
     getActiveCenterPoint,
     selectListing,
+    openCenterPointModal,
   } = useMapsStore();
-
-  const [isCenterPointModalOpen, setIsCenterPointModalOpen] = React.useState(false);
 
   // Weighted scoring weights (sum to 100)
   const [rentWeight, setRentWeight] = React.useState(40);
@@ -86,7 +84,7 @@ export function CompareView() {
         maxSize === minSize ? 1 : (size - minSize) / (maxSize - minSize);
 
       // Amenities score: count active amenities (out of 6)
-      const activeCount = Object.values(listing.amenities).filter(Boolean).length;
+      const activeCount = Object.values(listing.amenities || {}).filter(Boolean).length;
       const amenityScore = activeCount / 6;
 
       const totalWeighted =
@@ -142,14 +140,14 @@ export function CompareView() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={() => setIsCenterPointModalOpen(true)}
+            className="h-8 text-xs gap-1.5 cursor-pointer"
+            onClick={() => openCenterPointModal()}
           >
             <Target className="size-3.5 text-pink-500" />
             <span>{activeCenterPoint?.name || "Target Point"}</span>
           </Button>
 
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1 cursor-pointer">
             <Link href="/">
               <MapPin className="size-3.5" />
               <span>Map View</span>
@@ -160,7 +158,7 @@ export function CompareView() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-destructive"
+              className="h-8 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
               onClick={clearCompareListings}
             >
               Clear
@@ -181,7 +179,7 @@ export function CompareView() {
               key={l.id}
               onClick={() => toggleCompareListing(l.id)}
               className={cn(
-                "px-2.5 py-1 rounded-full border text-xs whitespace-nowrap transition-colors flex items-center gap-1.5",
+                "px-2.5 py-1 rounded-full border text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer",
                 isSelected
                   ? "bg-primary text-primary-foreground border-primary font-medium"
                   : "bg-background hover:bg-muted text-foreground"
@@ -210,7 +208,7 @@ export function CompareView() {
             step="5"
             value={rentWeight}
             onChange={(e) => setRentWeight(Number(e.target.value))}
-            className="w-20 accent-blue-600"
+            className="w-20 accent-blue-600 cursor-pointer"
           />
         </div>
 
@@ -223,7 +221,7 @@ export function CompareView() {
             step="5"
             value={distanceWeight}
             onChange={(e) => setDistanceWeight(Number(e.target.value))}
-            className="w-20 accent-pink-600"
+            className="w-20 accent-pink-600 cursor-pointer"
           />
         </div>
 
@@ -236,7 +234,7 @@ export function CompareView() {
             step="5"
             value={sizeWeight}
             onChange={(e) => setSizeWeight(Number(e.target.value))}
-            className="w-20 accent-emerald-600"
+            className="w-20 accent-emerald-600 cursor-pointer"
           />
         </div>
 
@@ -249,7 +247,7 @@ export function CompareView() {
             step="5"
             value={amenityWeight}
             onChange={(e) => setAmenityWeight(Number(e.target.value))}
-            className="w-20 accent-purple-600"
+            className="w-20 accent-purple-600 cursor-pointer"
           />
         </div>
       </div>
@@ -265,6 +263,7 @@ export function CompareView() {
             </p>
             <Button
               size="sm"
+              className="cursor-pointer"
               onClick={() => {
                 listings.slice(0, 3).forEach((l) => toggleCompareListing(l.id));
               }}
@@ -301,7 +300,7 @@ export function CompareView() {
                   {/* Remove Button */}
                   <button
                     onClick={() => toggleCompareListing(listing.id)}
-                    className="absolute top-2 right-2 z-10 p-1 rounded-full bg-background/80 hover:bg-background shadow text-muted-foreground hover:text-foreground"
+                    className="absolute top-2 right-2 z-10 p-1 rounded-full bg-background/80 hover:bg-background shadow text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -381,12 +380,12 @@ export function CompareView() {
                       </span>
                       <div className="grid grid-cols-2 gap-1 text-[11px]">
                         {[
-                          { name: "Gym", val: listing.amenities.gym },
-                          { name: "Pool", val: listing.amenities.pool },
-                          { name: "Parking", val: listing.amenities.parking },
-                          { name: "Elevator", val: listing.amenities.elevator },
-                          { name: "CCTV", val: listing.amenities.cctv },
-                          { name: "Keycard", val: listing.amenities.keycard },
+                          { name: "Gym", val: listing.amenities?.gym },
+                          { name: "Pool", val: listing.amenities?.pool },
+                          { name: "Parking", val: listing.amenities?.parking },
+                          { name: "Elevator", val: listing.amenities?.elevator },
+                          { name: "CCTV", val: listing.amenities?.cctv },
+                          { name: "Keycard", val: listing.amenities?.keycard },
                         ].map((item) => (
                           <div
                             key={item.name}
@@ -421,7 +420,7 @@ export function CompareView() {
                       asChild
                       size="sm"
                       variant="outline"
-                      className="w-full text-xs gap-1 mt-2"
+                      className="w-full text-xs gap-1 mt-2 cursor-pointer"
                       onClick={() => selectListing(listing.id)}
                     >
                       <Link href="/">
@@ -436,11 +435,6 @@ export function CompareView() {
           </div>
         )}
       </div>
-
-      <CenterPointModal
-        open={isCenterPointModalOpen}
-        onOpenChange={setIsCenterPointModalOpen}
-      />
     </div>
   );
 }
