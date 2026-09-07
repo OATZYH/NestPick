@@ -1,6 +1,6 @@
 {
   "name": "nestpick",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,6 +16,9 @@
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
     "db:seed": "tsx scripts/seed.ts",
+    "db:wipe": "tsx scripts/db-wipe.ts",
+    "db:wipe:only": "tsx scripts/db-wipe.ts --only",
+    "db:wipe:seed": "tsx scripts/db-wipe.ts --seed",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down"
   },

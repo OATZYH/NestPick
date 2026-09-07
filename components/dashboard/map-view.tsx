@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "next-themes";
 import { useMapsStore, formatDistance, calculateDistance, getLatestRent } from "@/store/maps-store";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
+import { isValidCoordinates } from "@/lib/utils";
 
 const MAP_STYLES = {
   light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
@@ -21,11 +22,13 @@ export function MapView() {
   const markersRef = React.useRef<Map<string, maplibregl.Marker>>(new Map());
   const centerPointMarkersRef = React.useRef<Map<string, maplibregl.Marker>>(new Map());
   const tempPinMarkerRef = React.useRef<maplibregl.Marker | null>(null);
+  const userLocationMarkerRef = React.useRef<maplibregl.Marker | null>(null);
   const popupRef = React.useRef<maplibregl.Popup | null>(null);
   const clickActionPopupRef = React.useRef<maplibregl.Popup | null>(null);
   const isAnimatingRef = React.useRef(false);
   const closeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isHoveringPopupRef = React.useRef(false);
+  const userClickedMarkerRef = React.useRef(false);
   const { resolvedTheme } = useTheme();
 
   const {
@@ -41,6 +44,10 @@ export function MapView() {
     routeDestinationId,
     getFilteredListings,
     listings: allListings,
+    selectedCategory,
+    selectedStatus,
+    searchQuery,
+    sortBy,
     isPickingOnMap,
     pickingTarget,
     pendingCoordinates,
@@ -48,6 +55,7 @@ export function MapView() {
     openCenterPointModal,
     finishMapPicking,
     cancelMapPicking,
+    userLocation,
   } = useMapsStore();
 
   const isPickingOnMapRef = React.useRef(isPickingOnMap);
@@ -58,13 +66,15 @@ export function MapView() {
     }
   }, [isPickingOnMap]);
 
-  // Keyboard shortcut to cancel picking on map
+  // Keyboard shortcut to cancel picking on map or deselect listing
   React.useEffect(() => {
-    if (!isPickingOnMap) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        cancelMapPicking();
+        if (isPickingOnMapRef.current) {
+          cancelMapPicking();
+        } else if (useMapsStore.getState().selectedListingId) {
+          useMapsStore.getState().selectListing(null);
+        }
       }
     };
 
@@ -72,7 +82,7 @@ export function MapView() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isPickingOnMap, cancelMapPicking]);
+  }, [cancelMapPicking]);
 
   const activeCenterPoint = centerPoints.find((cp) => cp.id === activeCenterPointId) || centerPoints[0];
 
@@ -83,7 +93,10 @@ export function MapView() {
     return MAP_STYLES[mapStyle];
   }, [mapStyle, resolvedTheme]);
 
-  const listings = getFilteredListings();
+  const listings = React.useMemo(() => {
+    return getFilteredListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allListings, selectedCategory, selectedStatus, searchQuery, sortBy, activeCenterPointId]);
 
   const closePopup = React.useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -127,13 +140,14 @@ export function MapView() {
       setMapZoom(zoom);
     });
 
-    // Map Click Listener (Option A: Picking on Map; Option B: Quick Action Menu)
+    // Map Click Listener (Option A: Picking on Map; Option B: Quick Action Menu; Option C: Deselect active listing)
     map.on("click", (e) => {
       const originalTarget = e.originalEvent?.target as HTMLElement | null;
       if (
         originalTarget &&
         (originalTarget.closest(".listing-marker-container") ||
           originalTarget.closest(".center-point-marker") ||
+          originalTarget.closest(".user-location-marker") ||
           originalTarget.closest(".maplibregl-popup-content") ||
           originalTarget.closest(".maplibregl-ctrl"))
       ) {
@@ -150,7 +164,18 @@ export function MapView() {
         return;
       }
 
-      // Case 2: Normal map click -> Show quick action popup
+      // Case 2: Deselect currently selected listing if one is active
+      const currentSelectedId = useMapsStore.getState().selectedListingId;
+      if (currentSelectedId) {
+        useMapsStore.getState().selectListing(null);
+        if (clickActionPopupRef.current) {
+          clickActionPopupRef.current.remove();
+          clickActionPopupRef.current = null;
+        }
+        return;
+      }
+
+      // Case 3: Normal map click -> Show quick action popup
       if (clickActionPopupRef.current) {
         clickActionPopupRef.current.remove();
         clickActionPopupRef.current = null;
@@ -222,48 +247,53 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update style on theme / style change
+  // Update map style when theme or mapStyle changes
   React.useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setStyle(getMapStyleUrl());
-  }, [mapStyle, resolvedTheme, getMapStyleUrl]);
+  }, [getMapStyleUrl]);
 
-  // Center Points Markers (Workplace, University, Transit)
+  // Render User Location Beacon Marker
   React.useEffect(() => {
     if (!mapRef.current) return;
 
-    centerPointMarkersRef.current.forEach((marker) => marker.remove());
-    centerPointMarkersRef.current.clear();
+    if (!userLocation || !isValidCoordinates(userLocation.lat, userLocation.lng)) {
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
+      return;
+    }
 
-    centerPoints.forEach((cp) => {
-      const isActive = cp.id === activeCenterPointId;
+    if (!userLocationMarkerRef.current) {
       const el = document.createElement("div");
-      el.className = "center-point-marker";
+      el.className = "user-location-marker relative flex items-center justify-center cursor-pointer";
       el.innerHTML = `
-        <div class="relative flex items-center justify-center cursor-pointer group">
-          <div class="absolute -inset-2 rounded-full ${
-            isActive ? "bg-pink-500/20 animate-ping" : ""
-          }"></div>
-          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-lg border-2 ${
-            isActive
-              ? "bg-pink-600 text-white border-white scale-110"
-              : "bg-background text-foreground border-pink-500 opacity-90 hover:scale-105"
-          } transition-all duration-200">
-            <span class="text-xs">🎯</span>
-            <span class="text-[11px] font-semibold whitespace-nowrap">${cp.name}</span>
-          </div>
-        </div>
+        <span class="absolute size-8 rounded-full bg-blue-500/25 animate-ping"></span>
+        <span class="absolute size-5 rounded-full bg-blue-500/40 animate-pulse"></span>
+        <span class="size-3.5 rounded-full bg-blue-600 border-2 border-white shadow-md relative z-10"></span>
       `;
 
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([cp.lng, cp.lat])
-        .addTo(mapRef.current!);
+      const userPopup = new maplibregl.Popup({ offset: [0, -10], closeButton: false })
+        .setHTML(`<div class="text-[11px] font-semibold px-1 py-0.5 text-center">📍 Your Current Location</div>`);
 
-      centerPointMarkersRef.current.set(cp.id, marker);
-    });
-  }, [centerPoints, activeCenterPointId]);
+      userLocationMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([userLocation.lng, userLocation.lat])
+        .setPopup(userPopup)
+        .addTo(mapRef.current);
+    } else {
+      userLocationMarkerRef.current.setLngLat([userLocation.lng, userLocation.lat]);
+    }
 
-  // Temporary Marker for Pending Coordinates (e.g. freshly picked or hovered)
+    return () => {
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
+    };
+  }, [userLocation]);
+
+  // Temporary Marker while picking or adding
   React.useEffect(() => {
     if (!mapRef.current) return;
 
@@ -274,23 +304,109 @@ export function MapView() {
 
     if (pendingCoordinates) {
       const el = document.createElement("div");
-      el.className = "temp-pin-marker animate-bounce";
+      el.className = "temp-marker-root select-none cursor-pointer";
       el.innerHTML = `
-        <div class="relative flex items-center justify-center cursor-pointer">
-          <div class="absolute -inset-2 rounded-full bg-primary/25 animate-ping"></div>
-          <div class="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xl border-2 border-background text-xs font-bold">
-            📍
+        <div class="relative flex flex-col items-center animate-bounce">
+          <div class="size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl border-2 border-background ring-4 ring-primary/20">
+            <span class="text-sm font-bold">${pickingTarget === "center-point" ? "🎯" : "📍"}</span>
+          </div>
+          <div class="w-2 h-2 bg-primary rotate-45 -mt-1 border-r border-b border-background"></div>
+        </div>
+      `;
+
+      tempPinMarkerRef.current = new maplibregl.Marker({
+        element: el,
+        anchor: "bottom",
+      })
+        .setLngLat([pendingCoordinates.lng, pendingCoordinates.lat])
+        .addTo(mapRef.current);
+    }
+  }, [pendingCoordinates, pickingTarget]);
+
+  // Render Center Point Markers (only rebuilt when centerPoints list changes)
+  React.useEffect(() => {
+    if (!mapRef.current) return;
+
+    centerPointMarkersRef.current.forEach((marker) => marker.remove());
+    centerPointMarkersRef.current.clear();
+
+    centerPoints.forEach((cp) => {
+      const isActive = cp.id === activeCenterPointId;
+
+      const el = document.createElement("div");
+      el.className = "center-point-marker select-none cursor-pointer";
+      el.style.zIndex = isActive ? "30" : "20";
+
+      el.innerHTML = `
+        <div class="center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 ${
+          isActive ? "scale-110" : "opacity-80 hover:opacity-100 hover:scale-105"
+        }">
+          <div class="center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 ${
+            isActive
+              ? "bg-pink-600 text-white border-pink-700 ring-2 ring-pink-400/40"
+              : "bg-background/95 text-foreground border-border"
+          }">
+            <span>${cp.icon || "🎯"}</span>
+            <span>${cp.name}</span>
+          </div>
+          <div class="size-3.5 rounded-full bg-pink-600 border-2 border-white shadow-sm flex items-center justify-center">
+            <div class="size-1 rounded-full bg-white"></div>
           </div>
         </div>
       `;
 
-      tempPinMarkerRef.current = new maplibregl.Marker({ element: el })
-        .setLngLat([pendingCoordinates.lng, pendingCoordinates.lat])
-        .addTo(mapRef.current);
-    }
-  }, [pendingCoordinates]);
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        useMapsStore.getState().setActiveCenterPoint(cp.id);
+      });
 
-  // Listings Markers
+      const marker = new maplibregl.Marker({
+        element: el,
+        anchor: "bottom",
+      })
+        .setLngLat([cp.lng, cp.lat])
+        .addTo(mapRef.current!);
+
+      centerPointMarkersRef.current.set(cp.id, marker);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerPoints]);
+
+  // Synchronize Center Point active state in-place (100% flicker-free)
+  React.useEffect(() => {
+    centerPointMarkersRef.current.forEach((marker, id) => {
+      const isActive = id === activeCenterPointId;
+      const el = marker.getElement();
+      if (!el) return;
+
+      el.style.zIndex = isActive ? "30" : "20";
+
+      const inner = el.querySelector<HTMLElement>(".center-point-inner");
+      const badge = el.querySelector<HTMLElement>(".center-point-badge");
+
+      if (isActive) {
+        if (inner) {
+          inner.className =
+            "center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 scale-110";
+        }
+        if (badge) {
+          badge.className =
+            "center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 bg-pink-600 text-white border-pink-700 ring-2 ring-pink-400/40";
+        }
+      } else {
+        if (inner) {
+          inner.className =
+            "center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 opacity-80 hover:opacity-100 hover:scale-105";
+        }
+        if (badge) {
+          badge.className =
+            "center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 bg-background/95 text-foreground border-border";
+        }
+      }
+    });
+  }, [activeCenterPointId]);
+
+  // Render Listing Markers (only rebuilt when listings or active center point change)
   React.useEffect(() => {
     if (!mapRef.current) return;
 
@@ -298,45 +414,49 @@ export function MapView() {
     markersRef.current.clear();
 
     listings.forEach((listing) => {
-      const typeConfig = propertyTypes.find((t) => t.id === listing.type);
-      const statusConfig = pipelineStatuses.find((s) => s.id === listing.status);
+      const isSelected = listing.id === selectedListingId;
       const rent = getLatestRent(listing);
-      const rentDisplay = rent ? `฿${(rent / 1000).toFixed(0)}k` : "N/A";
-      const isSelected = selectedListingId === listing.id;
-      const isRouteDestination = routeDestinationId === listing.id;
-
+      const statusConfig = pipelineStatuses.find((s) => s.id === listing.status);
+      const typeConfig = propertyTypes.find((t) => t.id === listing.type);
       const dist = activeCenterPoint
-        ? calculateDistance(activeCenterPoint.lat, activeCenterPoint.lng, listing.lat, listing.lng)
+        ? calculateDistance(
+            activeCenterPoint.lat,
+            activeCenterPoint.lng,
+            listing.lat,
+            listing.lng
+          )
         : null;
 
       const el = document.createElement("div");
-      el.className = "listing-marker-container";
+      el.className = "listing-marker-container select-none cursor-pointer";
+      el.style.zIndex = isSelected ? "40" : "10";
+
+      const formattedRent = rent > 0 ? `฿${Math.round(rent / 1000)}k` : "N/A";
+
       el.innerHTML = `
-        <div class="relative cursor-pointer transition-all duration-200 ${
-          isSelected || isRouteDestination ? "scale-125 z-30" : "hover:scale-110 z-10"
+        <div class="marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform ${
+          isSelected ? "scale-115" : "hover:scale-110"
         }">
-          <div class="flex items-center gap-1 px-2 py-0.5 rounded-full shadow-md border text-xs font-bold ${
+          <div class="marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1.5 border transition-all duration-200 ${
             isSelected
-              ? "bg-blue-600 text-white border-white ring-2 ring-blue-400"
-              : isRouteDestination
-              ? "bg-emerald-600 text-white border-white ring-2 ring-emerald-400"
-              : "bg-background text-foreground border-border hover:border-blue-500"
+              ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40 shadow-lg"
+              : "bg-background/95 text-foreground border-border hover:border-primary/60"
           }">
-            <span class="size-2 rounded-full inline-block" style="background-color: ${
+            <span class="size-2 rounded-full shrink-0" style="background-color: ${
               statusConfig?.color || "#3b82f6"
             }"></span>
-            <span>${rentDisplay}</span>
+            <span class="font-bold tracking-tight">${formattedRent}</span>
+            ${listing.is_favorite ? '<span class="text-[10px] text-amber-500">★</span>' : ""}
           </div>
-          ${
-            isSelected
-              ? '<div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-blue-500 animate-ping"></div>'
-              : ""
-          }
+          <div class="marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 ${
+            isSelected ? "text-primary" : "text-border"
+          }"></div>
         </div>
       `;
 
       el.addEventListener("click", (e) => {
         e.stopPropagation();
+        userClickedMarkerRef.current = true;
         selectListing(listing.id);
       });
 
@@ -388,7 +508,7 @@ export function MapView() {
         `;
 
         const popup = new maplibregl.Popup({
-          offset: [0, -25],
+          offset: [0, -36],
           closeButton: false,
           closeOnClick: false,
           className: "location-hover-popup",
@@ -411,6 +531,7 @@ export function MapView() {
             closePopup();
           });
           popupElement.addEventListener("click", () => {
+            userClickedMarkerRef.current = true;
             selectListing(listing.id);
             popup.remove();
             popupRef.current = null;
@@ -424,27 +545,74 @@ export function MapView() {
         closePopup();
       });
 
-      const marker = new maplibregl.Marker({ element: el })
+      const marker = new maplibregl.Marker({
+        element: el,
+        anchor: "bottom",
+      })
         .setLngLat([listing.lng, listing.lat])
         .addTo(mapRef.current!);
 
       markersRef.current.set(listing.id, marker);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedListingId is intentionally synced in separate effect to prevent rebuilding DOM markers
   }, [
     listings,
-    selectedListingId,
+    activeCenterPoint,
     selectListing,
     closePopup,
-    routeDestinationId,
-    activeCenterPoint,
   ]);
 
-  // Route drawing function declared before useEffect to satisfy React compiler
+  // Synchronize marker visual styles on selection change without destroying DOM (100% flicker-free)
+  React.useEffect(() => {
+    markersRef.current.forEach((marker, id) => {
+      const isSelected = id === selectedListingId;
+      const el = marker.getElement();
+      if (!el) return;
+
+      el.style.zIndex = isSelected ? "40" : "10";
+
+      const wrapper = el.querySelector<HTMLElement>(".marker-wrapper");
+      const pill = el.querySelector<HTMLElement>(".marker-pill");
+      const arrow = el.querySelector<HTMLElement>(".marker-arrow");
+
+      if (isSelected) {
+        if (wrapper) {
+          wrapper.className =
+            "marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform scale-115";
+        }
+        if (pill) {
+          pill.className =
+            "marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 border transition-all duration-200 bg-primary text-primary-foreground border-primary ring-2 ring-primary/40";
+        }
+        if (arrow) {
+          arrow.className = "marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 text-primary";
+        }
+      } else {
+        if (wrapper) {
+          wrapper.className =
+            "marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform hover:scale-110";
+        }
+        if (pill) {
+          pill.className =
+            "marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1.5 border transition-all duration-200 bg-background/95 text-foreground border-border hover:border-primary/60";
+        }
+        if (arrow) {
+          arrow.className = "marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 text-border";
+        }
+      }
+    });
+  }, [selectedListingId]);
+
+  // Route drawing function
   const drawRoute = React.useCallback(
     (map: maplibregl.Map, coordinates: [number, number][]) => {
-      if (map.getLayer("route-line")) map.removeLayer("route-line");
-      if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
-      if (map.getSource("route")) map.removeSource("route");
+      const clearRouteLayers = () => {
+        if (map.getLayer("route-line")) map.removeLayer("route-line");
+        if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+        if (map.getSource("route")) map.removeSource("route");
+      };
+
+      clearRouteLayers();
 
       map.addSource("route", {
         type: "geojson",
@@ -576,17 +744,28 @@ export function MapView() {
     };
   }, [drawRoute, routeDestinationId]);
 
-  // Fly to selected listing
+  // Fly to selected listing (only when selected from panel/table, NOT when clicking marker directly)
   React.useEffect(() => {
     if (!mapRef.current || !selectedListingId) return;
     if (routeDestinationId) return;
 
+    if (userClickedMarkerRef.current) {
+      // User clicked pin directly on map: keep camera stationary so pin stays under cursor without shifting
+      userClickedMarkerRef.current = false;
+      return;
+    }
+
     const listing = listings.find((l) => l.id === selectedListingId);
     if (listing) {
       isAnimatingRef.current = true;
+      const targetZoom = Math.max(mapRef.current.getZoom(), 14);
+      lastCenterRef.current = { lat: listing.lat, lng: listing.lng };
+      lastZoomRef.current = targetZoom;
+
       mapRef.current.flyTo({
         center: [listing.lng, listing.lat],
-        zoom: Math.max(mapRef.current.getZoom(), 14),
+        zoom: targetZoom,
+        duration: 500,
         essential: true,
       });
     }
@@ -601,6 +780,7 @@ export function MapView() {
 
   React.useEffect(() => {
     if (!mapRef.current) return;
+    if (isAnimatingRef.current) return;
 
     const centerChanged =
       Math.abs(lastCenterRef.current.lat - mapCenter.lat) > 0.0001 ||
@@ -621,7 +801,7 @@ export function MapView() {
 
   return (
     <div className="relative w-full h-full">
-      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+      <div ref={containerRef} className="absolute inset-0 w-full h-full z-0 isolate" />
 
       {/* Interactive Map Picking Banner */}
       {isPickingOnMap && (

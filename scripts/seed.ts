@@ -1,9 +1,9 @@
 /**
- * Seeds the Neon Postgres database with the app's mock data
+ * Seeds the Postgres database with the app's mock data
  * (mock-data/condos.ts) using Prisma Client.
  *
  * Usage:
- *   bun run db:seed
+ *   npm run db:seed
  */
 import { prisma, Prisma } from "../lib/prisma";
 import {
@@ -13,8 +13,8 @@ import {
   initialListings,
 } from "../mock-data/condos";
 
-async function clearTables() {
-  console.log("Clearing existing rows...");
+export async function clearTables() {
+  console.log("🗑️  Clearing existing rows...");
   await prisma.viewingLog.deleteMany();
   await prisma.contract.deleteMany();
   await prisma.priceHistory.deleteMany();
@@ -22,9 +22,10 @@ async function clearTables() {
   await prisma.centerPoint.deleteMany();
   await prisma.pipelineStatus.deleteMany();
   await prisma.propertyType.deleteMany();
+  console.log("✨ All tables cleared.");
 }
 
-async function seedPropertyTypes() {
+export async function seedPropertyTypes() {
   console.log(`Seeding ${propertyTypes.length} property types...`);
   for (const p of propertyTypes) {
     await prisma.propertyType.upsert({
@@ -35,7 +36,7 @@ async function seedPropertyTypes() {
   }
 }
 
-async function seedPipelineStatuses() {
+export async function seedPipelineStatuses() {
   console.log(`Seeding ${pipelineStatuses.length} pipeline statuses...`);
   for (const s of pipelineStatuses) {
     await prisma.pipelineStatus.upsert({
@@ -46,7 +47,7 @@ async function seedPipelineStatuses() {
   }
 }
 
-async function seedCenterPoints() {
+export async function seedCenterPoints() {
   console.log(`Seeding ${initialCenterPoints.length} center points...`);
   for (const c of initialCenterPoints) {
     await prisma.centerPoint.upsert({
@@ -72,7 +73,7 @@ async function seedCenterPoints() {
   }
 }
 
-async function seedListings() {
+export async function seedListings() {
   console.log(`Seeding ${initialListings.length} listings...`);
   for (const listing of initialListings) {
     const amenitiesJson = listing.amenities as unknown as Prisma.InputJsonValue;
@@ -167,13 +168,17 @@ async function seedListings() {
   }
 }
 
+export async function runSeed() {
+  await seedPropertyTypes();
+  await seedPipelineStatuses();
+  await seedCenterPoints();
+  await seedListings();
+}
+
 async function main() {
   try {
     await clearTables();
-    await seedPropertyTypes();
-    await seedPipelineStatuses();
-    await seedCenterPoints();
-    await seedListings();
+    await runSeed();
     console.log("✅ Seed complete via Prisma Client.");
   } catch (err) {
     console.error("❌ Seed failed:", err);
@@ -183,4 +188,7 @@ async function main() {
   }
 }
 
-main();
+// Only execute main when run directly
+if (process.argv[1] && (process.argv[1].endsWith("seed.ts") || process.argv[1].endsWith("seed.js"))) {
+  main();
+}

@@ -204,16 +204,12 @@ export const useMapsStore = create<MapsState>()(
 
       selectListing: (listingId) => {
         const state = get();
-        if (listingId) {
-          const item = state.listings.find((l) => l.id === listingId);
-          if (item) {
-            set({
-              selectedListingId: listingId,
-              mapCenter: { lat: item.lat, lng: item.lng },
-            });
-            return;
-          }
+        // If passing null, undefined, or clicking the already selected listing -> toggle off / deselect
+        if (!listingId || state.selectedListingId === listingId) {
+          set({ selectedListingId: null, routeDestinationId: null });
+          return;
         }
+
         set({ selectedListingId: listingId });
       },
 

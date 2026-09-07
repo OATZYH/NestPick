@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
@@ -9,6 +10,12 @@ const globalForPrisma = globalThis as unknown as {
 
 const connectionString =
   process.env.DATABASE_URL ?? process.env.DATABASE_URL_UNPOOLED;
+
+if (!connectionString) {
+  console.warn(
+    "⚠️ DATABASE_URL is not set in environment. Please check your .env file."
+  );
+}
 
 const isLocalhost =
   !connectionString ||

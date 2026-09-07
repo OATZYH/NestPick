@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-09-08
+
+### Added
+- **Database Wipe & Seed CLI Script (`scripts/db-wipe.ts`, `package.json`)**:
+  - Interactive CLI utility supporting two clean operations: (1) Wipe all data and re-seed with clean Bangkok mock data, or (2) Just wipe database clean.
+  - Supports automated CLI flags `--seed`, `--only`, and `--force` for non-interactive scripting.
+  - Added npm scripts: `npm run db:wipe`, `npm run db:wipe:only`, and `npm run db:wipe:seed`.
+  - Added clean foreign key cascade deletion order across `Listing`, `PriceHistory`, `Contract`, `ViewingLog`, and `CenterPoint`.
+- **GPS Location Beacon (`components/dashboard/map-view.tsx`, `components/dashboard/map-controls.tsx`, `lib/utils.ts`)**:
+  - Added GPS coordinate boundary validation helper `isValidCoordinates(lat, lng)`.
+  - Fixed Crosshairs geolocation button with accurate error handling, permission checks, and timeout recovery.
+  - Added pulsating blue radar beacon marker on the map indicating current user position with tooltip.
+  - Added pointer cursor and hover tooltips for map control buttons.
+
+### Fixed & Improved
+- **Condo Selection & Deselection UX (`store/maps-store.ts`, `components/dashboard/maps-panel.tsx`, `components/dashboard/map-view.tsx`)**:
+  - Enabled multi-surface deselection: re-clicking an active map marker, clicking on empty map canvas, or pressing `Escape` key clears active condo selection.
+  - Added "1 condo selected" banner with a "Deselect" button at the top of `MapsPanel`.
+  - Added `✕` close button on condo card header and `Close` button on expanded card footer.
+- **Pin Flickering & Coordinate Jump Elimination (`components/dashboard/map-view.tsx`, `store/maps-store.ts`)**:
+  - **Flicker-Free Marker Updates**: Decoupled MapLibre marker lifecycle from `selectedListingId`. Markers are preserved in-memory and visual states (scale, highlight ring, z-index) are synchronized in-place without destroying and recreating DOM nodes.
+  - **Stationary GPS Anchoring**: Added `anchor: "bottom"` and `origin-bottom` (`transform-origin: bottom center`) to pins so selection scaling expands strictly upwards from the pin tip, locking coordinates to the exact building location.
+  - **Protected Root Transform**: Fixed bug where setting `transform` directly on the root marker element blew away MapLibre coordinates (causing clicked condo pins to disappear). All transforms and animations are now safely applied to inner wrappers.
+  - **Target Pin Stability**: Fixed frantic flickering on temporary and reference point target pins (`🎯`) by isolating `animate-bounce` and hover effects to inner containers.
+  - **Data Memoization**: Memoized `getFilteredListings()` in `MapView` to eliminate redundant effect executions on re-renders.
+  - **Camera Cursor Stability**: Added `userClickedMarkerRef` so clicking a pin directly on the map keeps the camera stationary under the cursor.
+- **Layering & Z-Index Isolation (`components/dashboard/map-view.tsx`, `components/dashboard/maps-panel.tsx`)**:
+  - Encapsulated map viewport with `z-0 isolate` to establish an isolated stacking context.
+  - Elevated `MapsPanel` to `z-30` so that all map markers, selected condo pins, target reference points, and hover popups render **strictly behind the sidebar panel** when positioned on the left side of the map.
+
+---
+
 ## [0.3.0] - 2026-09-08
 
 ### Added

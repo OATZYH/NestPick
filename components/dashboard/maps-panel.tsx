@@ -33,6 +33,7 @@ import {
   Car,
   KeyRound,
   Layers,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -232,7 +233,7 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
   // Toggle button if panel is hidden
   if (!isPanelVisible) {
     return (
-      <div className="absolute top-4 left-4 z-20">
+      <div className="absolute top-4 left-4 z-30">
         <Button
           variant="secondary"
           size="sm"
@@ -250,7 +251,7 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
     <>
       <div
         className={cn(
-          "absolute top-4 left-4 bottom-4 z-20 w-[420px] max-w-[calc(100vw-32px)] flex flex-col bg-background/95 backdrop-blur-md rounded-2xl border shadow-2xl overflow-hidden transition-all duration-300"
+          "absolute top-4 left-4 bottom-4 z-30 w-[420px] max-w-[calc(100vw-32px)] flex flex-col bg-background/95 backdrop-blur-md rounded-2xl border shadow-2xl overflow-hidden transition-all duration-300"
         )}
       >
         {/* Header */}
@@ -377,6 +378,25 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto p-2 space-y-2.5 divide-y divide-border/40"
         >
+          {/* Active selection banner with quick deselect button */}
+          {selectedListingId && (
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs animate-in fade-in duration-150 mb-1">
+              <span className="font-medium text-primary flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-primary animate-pulse" />
+                <span>1 condo selected</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => selectListing(null)}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded hover:bg-primary/15 transition-colors"
+                title="Deselect condo (Esc)"
+              >
+                <X className="size-3.5" />
+                <span>Deselect</span>
+              </button>
+            </div>
+          )}
+
           {listings.length === 0 ? (
             <div className="py-12 px-4 text-center">
               <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3 text-muted-foreground">
@@ -459,6 +479,19 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {isSelected && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectListing(null);
+                          }}
+                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+                          title="Deselect condo (Esc)"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -853,6 +886,16 @@ export function MapsPanel({ mode = "all" }: MapsPanelProps) {
 
                       {/* Bottom action controls */}
                       <div className="flex items-center gap-2 pt-2 border-t">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                          onClick={() => selectListing(null)}
+                          title="Deselect condo (Esc)"
+                        >
+                          <X className="size-3.5" />
+                          <span>Close</span>
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
