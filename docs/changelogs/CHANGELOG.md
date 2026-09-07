@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.2] - 2026-09-08
+
+### Added
+- **NextAuth v5 Authentication Engine (`auth.ts`, `app/api/auth/[...nextauth]/route.ts`)**:
+  - Integrated `next-auth@beta` with credentials provider validating against `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+  - Enforced strict credential matching with no fallback strings, preventing unauthorized logins if environment variables are not set or credentials do not match.
+  - Configured JWT session strategy and dual secret support (`NEXTAUTH_SECRET` and `AUTH_SECRET`).
+- **Route Protection Proxy (`proxy.ts`)**:
+  - Configured Next.js 16's `proxy.ts` (successor to `middleware.ts`).
+  - Automatically redirects unauthenticated requests on all dashboard routes (`/`, `/table`, `/compare`, `/favorites`, `/recents`) and API endpoints to `/login?callbackUrl=...`.
+  - Automatically redirects authenticated users away from `/login` back to the dashboard (`/`).
+- **Standalone Login Page (`app/login/page.tsx`)**:
+  - Built dedicated login interface matching NestPick's styling, featuring brand logo, title, and theme switcher (`ThemeToggle`).
+  - Username and password input fields with Lucide icons.
+  - Password reveal toggle eye icon vertically centered using `inset-y-0` with pointer cursor.
+  - Error alert banners and loading spinner states on submit.
+  - Wrapped form in React `<Suspense>` boundary for safe client parameter handling.
+- **Sidebar Session & Sign Out (`components/dashboard/sidebar.tsx`, `components/session-provider.tsx`)**:
+  - Added client `SessionProvider` wrapper in `app/layout.tsx`.
+  - Added user authentication status badge and interactive **Sign Out** button in both expanded and collapsed sidebar modes.
+- **Environment & Git Tracking (`.env.example`, `.gitignore`)**:
+  - Added `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `NEXTAUTH_SECRET`, and `AUTH_SECRET` to `.env.example`.
+  - Added `!.env.example` exception rule to `.gitignore` to keep example templates tracked while securing `.env`.
+
+---
+
 ## [0.3.1] - 2026-09-08
 
 ### Added

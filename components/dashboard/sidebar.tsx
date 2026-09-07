@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   Sidebar,
   SidebarContent,
@@ -28,9 +29,12 @@ import {
   Scale,
   MapPin,
   Target,
+  LogOut,
+  User,
 } from "lucide-react";
 import { useMapsStore } from "@/store/maps-store";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { id: "map", title: "Map View", icon: MapPin, href: "/" },
@@ -54,6 +58,7 @@ export function LocationsSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const {
     listings,
     selectedCategory,
@@ -76,6 +81,10 @@ export function LocationsSidebar({
 
   const getStatusCount = (statusId: string) => {
     return listings.filter((l) => l.status === statusId).length;
+  };
+
+  const handleSignOut = async () => {
+    await signOut({ callbackUrl: "/login" });
   };
 
   return (
@@ -219,6 +228,7 @@ export function LocationsSidebar({
       </SidebarContent>
 
       <SidebarFooter className="px-2.5 pb-3">
+        {/* Expanded Footer */}
         <div className="group-data-[collapsible=icon]:hidden space-y-2">
           {/* Active Target Info Card */}
           <div className="rounded-lg border p-2.5 text-xs bg-muted/40">
@@ -234,9 +244,50 @@ export function LocationsSidebar({
             </p>
           </div>
 
+          {/* User Session & Logout */}
+          <div className="flex items-center justify-between rounded-lg border bg-background/50 px-2.5 py-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="size-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 flex items-center justify-center shrink-0">
+                <User className="size-3.5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground truncate">
+                  {session?.user?.name || "Admin"}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  Authenticated
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleSignOut}
+              title="Sign Out"
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="size-3.5" />
+              <span className="sr-only">Sign out</span>
+            </Button>
+          </div>
+
           <p className="text-center text-[10px] text-muted-foreground">
             NestPick • Condo Tracker
           </p>
+        </div>
+
+        {/* Collapsed Icon Mode Footer */}
+        <div className="hidden group-data-[collapsible=icon]:flex flex-col items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={handleSignOut}
+            title={`Sign out (${session?.user?.name || "Admin"})`}
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="size-3.5" />
+            <span className="sr-only">Sign out</span>
+          </Button>
         </div>
       </SidebarFooter>
       <SidebarRail />
