@@ -8,93 +8,7 @@ import { useMapsStore, formatDistance, calculateDistance, getLatestRent } from "
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
 import { isValidCoordinates } from "@/lib/utils";
 
-// High-resolution satellite style with overlay road networks and boundaries/labels (100% free, no API key required)
-const SATELLITE_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    "esri-satellite": {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: "Esri, Maxar, Earthstar Geographics",
-    },
-    "esri-transportation": {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-    },
-    "esri-labels": {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-    },
-  },
-  layers: [
-    {
-      id: "esri-satellite-layer",
-      type: "raster",
-      source: "esri-satellite",
-      minzoom: 0,
-      maxzoom: 22,
-    },
-    {
-      id: "esri-transportation-layer",
-      type: "raster",
-      source: "esri-transportation",
-      minzoom: 0,
-      maxzoom: 22,
-    },
-    {
-      id: "esri-labels-layer",
-      type: "raster",
-      source: "esri-labels",
-      minzoom: 0,
-      maxzoom: 22,
-    },
-  ],
-};
-
-// Detailed topographic / outdoors style with terrain shading and contours (100% free, no API key required)
-const OUTDOORS_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    "esri-topo": {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: "Esri, HERE, Garmin, Intermap, USGS, METI/NASA, EPA",
-    },
-  },
-  layers: [
-    {
-      id: "esri-topo-layer",
-      type: "raster",
-      source: "esri-topo",
-      minzoom: 0,
-      maxzoom: 22,
-    },
-  ],
-};
-
-const MAP_STYLES: Record<string, string | StyleSpecification> = {
-  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  streets: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-  outdoors: OUTDOORS_STYLE,
-  satellite: SATELLITE_STYLE,
-};
+import { resolveMapStyle } from "@/lib/map-styles";
 
 export function MapView() {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -173,10 +87,7 @@ export function MapView() {
   const activeCenterPoint = centerPoints.find((cp) => cp.id === activeCenterPointId) || centerPoints[0];
 
   const getMapStyle = React.useCallback((): string | StyleSpecification => {
-    if (mapStyle === "default") {
-      return resolvedTheme === "dark" ? MAP_STYLES.dark : MAP_STYLES.light;
-    }
-    return MAP_STYLES[mapStyle] || MAP_STYLES.light;
+    return resolveMapStyle(mapStyle, resolvedTheme);
   }, [mapStyle, resolvedTheme]);
 
   const listings = React.useMemo(() => {
