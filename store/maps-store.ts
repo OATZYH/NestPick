@@ -86,6 +86,14 @@ interface MapsState {
   routeDestinationId: string | null;
   isPanelVisible: boolean;
 
+  // Interactive Map Placement & Modals
+  isPickingOnMap: boolean;
+  pickingTarget: "listing" | "center-point" | null;
+  pendingCoordinates: { lat: number; lng: number } | null;
+  isListingModalOpen: boolean;
+  editingListing: Listing | null;
+  isCenterPointModalOpen: boolean;
+
   // Actions
   setSelectedCategory: (category: string) => void;
   setSelectedStatus: (status: string) => void;
@@ -123,6 +131,19 @@ interface MapsState {
   setPanelVisible: (visible: boolean) => void;
   togglePanelVisible: () => void;
 
+  // Modal & Map Picking Actions
+  openAddListing: (coords?: { lat: number; lng: number }) => void;
+  openEditListing: (listing: Listing) => void;
+  closeListingModal: () => void;
+  setIsListingModalOpen: (open: boolean) => void;
+  openCenterPointModal: (coords?: { lat: number; lng: number }) => void;
+  closeCenterPointModal: () => void;
+  setIsCenterPointModalOpen: (open: boolean) => void;
+  startMapPicking: (target: "listing" | "center-point") => void;
+  finishMapPicking: (coords: { lat: number; lng: number }) => void;
+  cancelMapPicking: () => void;
+  setPendingCoordinates: (coords: { lat: number; lng: number } | null) => void;
+
   // Selectors
   getActiveCenterPoint: () => CenterPoint | undefined;
   getDistanceToActiveCenterPoint: (listing: Listing) => number;
@@ -151,6 +172,14 @@ export const useMapsStore = create<MapsState>()(
       userLocation: null,
       routeDestinationId: null,
       isPanelVisible: true,
+
+      // Ephemeral picking & modal states
+      isPickingOnMap: false,
+      pickingTarget: null,
+      pendingCoordinates: null,
+      isListingModalOpen: false,
+      editingListing: null,
+      isCenterPointModalOpen: false,
 
       setSelectedCategory: (categoryId) => {
         set({ selectedCategory: categoryId });
@@ -258,18 +287,18 @@ export const useMapsStore = create<MapsState>()(
 
       addPriceHistory: (listingId, entry) =>
         set((state) => {
-          const newEntry: PriceHistory = {
-            ...entry,
-            id: `ph-${Date.now()}`,
-            listing_id: listingId,
-            recorded_at: entry.recorded_at || new Date().toISOString(),
-          };
           return {
             listings: state.listings.map((l) => {
               if (l.id !== listingId) return l;
+              const newEntry: PriceHistory = {
+                ...entry,
+                id: `ph-${Date.now()}`,
+                listing_id: listingId,
+                recorded_at: entry.recorded_at || new Date().toISOString(),
+              };
               return {
                 ...l,
-                price_history: [...l.price_history, newEntry],
+                price_history: [...(l.price_history || []), newEntry],
               };
             }),
           };
@@ -277,35 +306,35 @@ export const useMapsStore = create<MapsState>()(
 
       addViewingLog: (listingId, log) =>
         set((state) => {
-          const newLog: ViewingLog = {
-            ...log,
-            id: `vl-${Date.now()}`,
-            listing_id: listingId,
-          };
           return {
             listings: state.listings.map((l) => {
               if (l.id !== listingId) return l;
+              const newLog: ViewingLog = {
+                ...log,
+                id: `vl-${Date.now()}`,
+                listing_id: listingId,
+              };
               return {
                 ...l,
-                viewing_logs: [newLog, ...l.viewing_logs],
+                viewing_logs: [...(l.viewing_logs || []), newLog],
               };
             }),
           };
         }),
 
-      updateContract: (listingId, contractData) =>
+      updateContract: (listingId, contract) =>
         set((state) => {
-          const updatedContract: Contract = {
-            ...contractData,
-            id: `ct-${listingId}`,
-            listing_id: listingId,
-          };
           return {
             listings: state.listings.map((l) => {
               if (l.id !== listingId) return l;
+              const newContract: Contract = {
+                ...contract,
+                id: l.contract?.id || `contract-${Date.now()}`,
+                listing_id: listingId,
+              };
               return {
                 ...l,
-                contract: updatedContract,
+                contract: newContract,
               };
             }),
           };
@@ -349,6 +378,93 @@ export const useMapsStore = create<MapsState>()(
 
       setPanelVisible: (visible) => set({ isPanelVisible: visible }),
       togglePanelVisible: () => set((state) => ({ isPanelVisible: !state.isPanelVisible })),
+
+      // Modal & Map Picking Actions
+      openAddListing: (coords) =>
+        set({
+          isListingModalOpen: true,
+          editingListing: null,
+          pendingCoordinates: coords || null,
+          isPickingOnMap: false,
+          pickingTarget: null,
+        }),
+
+      openEditListing: (listing) =>
+        set({
+          isListingModalOpen: true,
+          editingListing: listing,
+          pendingCoordinates: { lat: listing.lat, lng: listing.lng },
+          isPickingOnMap: false,
+          pickingTarget: null,
+        }),
+
+      closeListingModal: () =>
+        set({
+          isListingModalOpen: false,
+          editingListing: null,
+          pendingCoordinates: null,
+        }),
+
+      setIsListingModalOpen: (open) =>
+        set((state) => ({
+          isListingModalOpen: open,
+          editingListing: open ? state.editingListing : null,
+          pendingCoordinates: open ? state.pendingCoordinates : null,
+        })),
+
+      openCenterPointModal: (coords) =>
+        set({
+          isCenterPointModalOpen: true,
+          pendingCoordinates: coords || null,
+          isPickingOnMap: false,
+          pickingTarget: null,
+        }),
+
+      closeCenterPointModal: () =>
+        set({
+          isCenterPointModalOpen: false,
+          pendingCoordinates: null,
+        }),
+
+      setIsCenterPointModalOpen: (open) =>
+        set((state) => ({
+          isCenterPointModalOpen: open,
+          pendingCoordinates: open ? state.pendingCoordinates : null,
+        })),
+
+      startMapPicking: (target) =>
+        set({
+          isPickingOnMap: true,
+          pickingTarget: target,
+          isListingModalOpen: false,
+          isCenterPointModalOpen: false,
+        }),
+
+      finishMapPicking: (coords) => {
+        const state = get();
+        const target = state.pickingTarget;
+        set({
+          isPickingOnMap: false,
+          pickingTarget: null,
+          pendingCoordinates: coords,
+          isListingModalOpen: target === "listing",
+          isCenterPointModalOpen: target === "center-point",
+          mapCenter: coords,
+        });
+      },
+
+      cancelMapPicking: () => {
+        const state = get();
+        const target = state.pickingTarget;
+        set({
+          isPickingOnMap: false,
+          pickingTarget: null,
+          isListingModalOpen: target === "listing",
+          isCenterPointModalOpen: target === "center-point",
+        });
+      },
+
+      setPendingCoordinates: (coords) => set({ pendingCoordinates: coords }),
 
       // Selectors
       getActiveCenterPoint: () => {

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-09-08
+
+### Added
+- **Click-on-Map Quick Action Menu (`components/dashboard/map-view.tsx`, `app/globals.css`)**:
+  - Added interactive click listener on the MapLibre map canvas displaying a contextual action popup at the clicked coordinates.
+  - Provides two one-click actions: **"➕ Add Listing Here"** (opens the listing creation dialog with coordinates pre-filled) and **"🎯 Set Reference Point"** (opens the commuting target modal with coordinates pre-filled).
+  - Configured click filtering so interacting with existing markers, controls, and popups does not trigger unwanted location popups.
+- **3-Option Location Selector (`components/dashboard/location-input-tabs.tsx`, `lib/geo-utils.ts`)**:
+  - Created reusable tabbed location selector component supporting three input methods:
+    1. **Google Maps Link / Coords**: Auto-parses coordinates from pasted desktop/mobile Google Maps URLs (`/@lat,lng`, `?q=lat,lng`, `!3dlat!4dlng`), search queries, and raw coordinate pairs (`13.7554, 100.5658`), displaying a success badge with extracted latitude and longitude.
+    2. **Click on Map**: Minimizes modal and activates interactive map-picking mode with a crosshair cursor, floating guidance banner (*"Click anywhere on map to place listing / waypoint • Cancel (Esc)"*), and an animated temporary placement marker.
+    3. **Manual Lat/Lng**: Numerical decimal inputs with step adjustments and physical coordinate boundary validation.
+- **Server-Side Google Maps URL Resolver (`app/api/resolve-maps-url/route.ts`)**:
+  - Added Next.js API route to resolve shortened mobile Google Maps URLs (`maps.app.goo.gl` and `goo.gl/maps`) by following HTTP redirects server-side and extracting destination coordinates from location headers and page metadata.
+- **Zustand Map Store State Synchronization (`store/maps-store.ts`, `components/dashboard/maps-panel.tsx`)**:
+  - Centralized modal visibility and editing states (`isListingModalOpen`, `isCenterPointModalOpen`, `editingListing`) in the global store to coordinate modals across map canvas clicks, panel headers, and table views.
+  - Added transient map-picking states (`isPickingOnMap`, `pickingTarget`, `pendingCoordinates`) excluded from LocalStorage persistence.
+- **Expanded 2-Column Responsive Modal Layout (`components/dashboard/listing-modal.tsx`)**:
+  - Retained the expanded 2-column desktop grid layout (`sm:max-w-4xl lg:max-w-5xl`): Left column for Property Info, 3-Option Location Picker, and Financials; Right column for Pipeline Status, Facility Amenities, Contacts, and Inspection Notes.
+  - Integrated the 3-option location picker in both `ListingModal` and `CenterPointModal`.
+
+---
+
 ## [0.2.1] - 2026-09-08
 
 ### Added
@@ -19,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `togglePanelVisible` action to Zustand maps store.
   - Enabled manual collapse and restoration of the floating maps panel on both desktop and mobile.
   - Added floating restore button with listing count badge (`PanelLeftOpen`) when panel is closed.
-- **Mobile Sidebar Trigger (`components/dashboard/map-controls.tsx`)**:
+- **Mobile Sidebar Trigger (`components/dashboard/map-controls.tsx`)**:\
   - Added mobile-only trigger button (`sm:hidden`) in top-right map controls to open the navigation drawer sheet on smaller screens.
 
 ### Changed & Fixed
@@ -27,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced redundant dropdown menu on the logo with a plain branding logo link.
   - Fixed sidebar toggle button alignment and spacing in `SidebarHeader`.
   - Switched sidebar collapse mode from `offcanvas` to `icon`, preserving a 48px navigation rail when collapsed instead of disappearing off-screen.
-  - Added centered trigger button in the icon rail and hover tooltips for all navigation items.
+  - Added centered trigger button in the icon rail and hover tooltips for all navigation items.\
 - **Listing Modal UI Fixes (`components/dashboard/listing-modal.tsx`)**:
   - Converted pipeline status selection from badge chips into a clean `<Select>` dropdown with color status indicators.
   - Removed numeric prefixes (`1. `, `2. `, etc.) from all modal section titles.
@@ -78,51 +101,3 @@ Transformed the template into a production-ready single-user condo/apartment hun
   - Added support for 4 property types: `condo`, `apartment`, `dorm`, `house`.
   - Added 6-stage tracking pipeline: `interested` → `viewing_scheduled` → `viewed` → `negotiating` → `decided` → `rejected`.
 - **Bangkok Rental Mock Dataset (`mock-data/condos.ts`)**:
-  - 8 realistic property listings across Bangkok (Sukhumvit, Asoke, Phrom Phong, Ari, Samyan, Rama 9, Sathorn) with high-res photos, lease terms, price histories, viewing logs, and contact information.
-  - 4 default reference points: Workplace (Siam / CentralWorld), BTS Asok Interchange, Chulalongkorn University, Silom/Sathorn CBD.
-- **Zustand State Store (`store/maps-store.ts`)**:
-  - LocalStorage persistence for user listings, center points, active target, and comparisons.
-  - Haversine distance calculator relative to the user's active reference center point.
-  - Actions for adding/updating/deleting listings, price history offers, viewing notes, contracts, and center points.
-  - Multi-criteria sorting: Nearest to Target, Rent (Low-High / High-Low), Size, Inspection Rating, Date Added, and Name.
-- **Floating Listing Information Panel (`components/dashboard/maps-panel.tsx`)**:
-  - Compact cards with photos, rent badges, floor/size specs, target distance, and pipeline status.
-  - Tabbed detail view:
-    - **Specs**: Amenities checklist, unblocked view, pros/cons notes.
-    - **Pricing History**: Timeline of initial prices vs negotiated counter-offers, with an inline "+ Offer" logger.
-    - **Lease Contract**: Duration, dates, deposit refund conditions, pet/smoking/guest policies, early termination terms.
-    - **Visit Logs**: Inspection dates, star ratings (1–5), notes on water pressure/noise/sunlight, with inline "+ Log Visit" form.
-    - **Direct Contacts**: One-click phone calling and direct LINE chat launcher (`line.me/ti/p/~...`).
-- **Interactive Map Dashboard (`components/dashboard/map-view.tsx`)**:
-  - Rent price pill badges and status-colored markers.
-  - Pulsing landmark pin for the active Reference Center Point.
-  - Rich hover preview cards showing thumbnail, rent, size, and distance.
-  - OSRM route line drawing connecting the listing to the target center point.
-- **Spreadsheet Table View (`components/dashboard/table-view.tsx` • `/table`)**:
-  - Google Sheets / Excel UX with sortable columns, alternating row highlights, and sticky header.
-  - Inline pipeline status dropdown directly inside the table cell.
-  - Quick action to select and fly to the place on the map.
-- **Side-by-Side Comparison Matrix (`components/dashboard/compare-view.tsx` • `/compare`)**:
-  - Side-by-side comparison across up to 4 listings.
-  - Weighted Scoring Engine with dynamic sliders (Budget, Distance, Room Size, Amenities) calculating a 0–100 match score and highlighting the #1 Top Match with a trophy badge.
-- **Navigation Sidebar (`components/dashboard/sidebar.tsx`)**:
-  - Updated navigation items: Map View (`/`), Spreadsheet Table (`/table`), Compare (`/compare`), Favorites (`/favorites`), Recent (`/recents`).
-  - Filters for property types and pipeline stages with item counts.
-  - Target Reference Point indicator card.
-- **Modals**:
-  - `ListingModal`: Comprehensive dialog to create or edit full listing records and pricing terms.
-  - `CenterPointModal`: Dialog to manage reference center points (workplace, university, transit, landmark).
-  - Radix UI Dialog (`components/ui/dialog.tsx`) and Radix UI Tabs (`components/ui/tabs.tsx`).
-
-### Fixed & Optimized
-- **Dependency Conflicts (`package.json`)**:
-  - Removed breaking `"brace-expansion": "^5.0.6"` and `"@isaacs/brace-expansion": "^5.0.1"` overrides that caused `TypeError: expand is not a function` in ESLint 9's config array parser.
-  - Removed unused root `"minimatch": "^10.2.3"`.
-- **ESLint 9 / Next.js 16 Configuration (`eslint.config.mjs`)**:
-  - Replaced legacy `@eslint/eslintrc` `FlatCompat` wrapper with native `import nextConfig from "eslint-config-next"` export.
-- **React 19 Rules & Build Stability**:
-  - Resolved `react-hooks/purity` error in `components/ui/sidebar.tsx` by eliminating `Math.random()` inside render.
-  - Resolved variable access order in `components/dashboard/map-view.tsx` for `drawRoute`.
-  - Replaced unescaped quotes in `components/dashboard/table-view.tsx``.
-- **Map View Controls (`components/dashboard/map-controls.tsx`)**:
-  - Updated default compass/reset view to center onto Bangkok and the active reference target point instead of world coordinates `(20, 0)`.

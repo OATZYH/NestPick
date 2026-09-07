@@ -20,7 +20,9 @@ export function MapView() {
   const mapRef = React.useRef<maplibregl.Map | null>(null);
   const markersRef = React.useRef<Map<string, maplibregl.Marker>>(new Map());
   const centerPointMarkersRef = React.useRef<Map<string, maplibregl.Marker>>(new Map());
+  const tempPinMarkerRef = React.useRef<maplibregl.Marker | null>(null);
   const popupRef = React.useRef<maplibregl.Popup | null>(null);
+  const clickActionPopupRef = React.useRef<maplibregl.Popup | null>(null);
   const isAnimatingRef = React.useRef(false);
   const closeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isHoveringPopupRef = React.useRef(false);
@@ -39,7 +41,38 @@ export function MapView() {
     routeDestinationId,
     getFilteredListings,
     listings: allListings,
+    isPickingOnMap,
+    pickingTarget,
+    pendingCoordinates,
+    openAddListing,
+    openCenterPointModal,
+    finishMapPicking,
+    cancelMapPicking,
   } = useMapsStore();
+
+  const isPickingOnMapRef = React.useRef(isPickingOnMap);
+  React.useEffect(() => {
+    isPickingOnMapRef.current = isPickingOnMap;
+    if (mapRef.current) {
+      mapRef.current.getCanvas().style.cursor = isPickingOnMap ? "crosshair" : "";
+    }
+  }, [isPickingOnMap]);
+
+  // Keyboard shortcut to cancel picking on map
+  React.useEffect(() => {
+    if (!isPickingOnMap) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        cancelMapPicking();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPickingOnMap, cancelMapPicking]);
 
   const activeCenterPoint = centerPoints.find((cp) => cp.id === activeCenterPointId) || centerPoints[0];
 
@@ -94,11 +127,94 @@ export function MapView() {
       setMapZoom(zoom);
     });
 
+    // Map Click Listener (Option A: Picking on Map; Option B: Quick Action Menu)
+    map.on("click", (e) => {
+      const originalTarget = e.originalEvent?.target as HTMLElement | null;
+      if (
+        originalTarget &&
+        (originalTarget.closest(".listing-marker-container") ||
+          originalTarget.closest(".center-point-marker") ||
+          originalTarget.closest(".maplibregl-popup-content") ||
+          originalTarget.closest(".maplibregl-ctrl"))
+      ) {
+        return;
+      }
+
+      const clickedLngLat = e.lngLat;
+      const lat = Number(clickedLngLat.lat.toFixed(6));
+      const lng = Number(clickedLngLat.lng.toFixed(6));
+
+      // Case 1: Active "Pick on Map" mode
+      if (isPickingOnMapRef.current) {
+        finishMapPicking({ lat, lng });
+        return;
+      }
+
+      // Case 2: Normal map click -> Show quick action popup
+      if (clickActionPopupRef.current) {
+        clickActionPopupRef.current.remove();
+        clickActionPopupRef.current = null;
+      }
+
+      const popupDiv = document.createElement("div");
+      popupDiv.className = "p-3 space-y-2.5 min-w-[210px] text-xs select-none";
+      popupDiv.innerHTML = `
+        <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-border/80">
+          <span class="font-semibold text-foreground flex items-center gap-1">
+            <span>📍</span>
+            <span>Picked Location</span>
+          </span>
+          <span class="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border">
+            ${lat.toFixed(4)}, ${lng.toFixed(4)}
+          </span>
+        </div>
+        <div class="flex flex-col gap-1.5 pt-0.5">
+          <button id="map-action-add-listing" class="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer active:scale-95">
+            <span>➕</span>
+            <span>Add Listing Here</span>
+          </button>
+          <button id="map-action-add-center" class="w-full text-left flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer active:scale-95">
+            <span>🎯</span>
+            <span>Set Reference Point</span>
+          </button>
+        </div>
+      `;
+
+      popupDiv.querySelector("#map-action-add-listing")?.addEventListener("click", () => {
+        clickActionPopupRef.current?.remove();
+        clickActionPopupRef.current = null;
+        openAddListing({ lat, lng });
+      });
+
+      popupDiv.querySelector("#map-action-add-center")?.addEventListener("click", () => {
+        clickActionPopupRef.current?.remove();
+        clickActionPopupRef.current = null;
+        openCenterPointModal({ lat, lng });
+      });
+
+      const actionPopup = new maplibregl.Popup({
+        offset: [0, -10],
+        closeButton: true,
+        closeOnClick: true,
+        className: "location-action-popup",
+        maxWidth: "280px",
+      })
+        .setLngLat([lng, lat])
+        .setDOMContent(popupDiv)
+        .addTo(map);
+
+      clickActionPopupRef.current = actionPopup;
+    });
+
     mapRef.current = map;
 
     return () => {
       if (closeTimeoutRef.current) {
         clearTimeout(closeTimeoutRef.current);
+      }
+      if (clickActionPopupRef.current) {
+        clickActionPopupRef.current.remove();
+        clickActionPopupRef.current = null;
       }
       map.remove();
       mapRef.current = null;
@@ -147,6 +263,33 @@ export function MapView() {
     });
   }, [centerPoints, activeCenterPointId]);
 
+  // Temporary Marker for Pending Coordinates (e.g. freshly picked or hovered)
+  React.useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (tempPinMarkerRef.current) {
+      tempPinMarkerRef.current.remove();
+      tempPinMarkerRef.current = null;
+    }
+
+    if (pendingCoordinates) {
+      const el = document.createElement("div");
+      el.className = "temp-pin-marker animate-bounce";
+      el.innerHTML = `
+        <div class="relative flex items-center justify-center cursor-pointer">
+          <div class="absolute -inset-2 rounded-full bg-primary/25 animate-ping"></div>
+          <div class="size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xl border-2 border-background text-xs font-bold">
+            📍
+          </div>
+        </div>
+      `;
+
+      tempPinMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([pendingCoordinates.lng, pendingCoordinates.lat])
+        .addTo(mapRef.current);
+    }
+  }, [pendingCoordinates]);
+
   // Listings Markers
   React.useEffect(() => {
     if (!mapRef.current) return;
@@ -192,11 +335,14 @@ export function MapView() {
         </div>
       `;
 
-      el.addEventListener("click", () => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
         selectListing(listing.id);
       });
 
       el.addEventListener("mouseenter", () => {
+        if (isPickingOnMapRef.current) return;
+
         if (closeTimeoutRef.current) {
           clearTimeout(closeTimeoutRef.current);
         }
@@ -473,5 +619,32 @@ export function MapView() {
     }
   }, [mapCenter, mapZoom]);
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Interactive Map Picking Banner */}
+      {isPickingOnMap && (
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-background/95 backdrop-blur-md border-2 border-primary shadow-2xl px-4 py-2 rounded-full animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="relative flex items-center justify-center">
+            <span className="size-2.5 rounded-full bg-primary animate-ping absolute" />
+            <span className="size-2 rounded-full bg-primary relative" />
+          </div>
+          <div className="text-xs font-medium">
+            <span className="font-semibold text-foreground">Click anywhere on map</span>
+            <span className="text-muted-foreground ml-1">
+              to place {pickingTarget === "listing" ? "listing" : "waypoint"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={cancelMapPicking}
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2.5 py-0.5 rounded-full bg-muted border hover:bg-muted/80 transition-colors cursor-pointer"
+          >
+            Cancel (Esc)
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

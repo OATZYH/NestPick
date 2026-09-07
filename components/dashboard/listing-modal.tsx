@@ -41,6 +41,7 @@ import {
 } from "@/types/hunting";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
 import { cn } from "@/lib/utils";
+import { LocationInputTabs } from "./location-input-tabs";
 
 interface ListingModalProps {
   open: boolean;
@@ -83,7 +84,13 @@ export function ListingModal({
   onOpenChange,
   initialListing,
 }: ListingModalProps) {
-  const { addListing, updateListing } = useMapsStore();
+  const {
+    addListing,
+    updateListing,
+    pendingCoordinates,
+    setPendingCoordinates,
+    startMapPicking,
+  } = useMapsStore();
 
   const [name, setName] = React.useState("");
   const [address, setAddress] = React.useState("");
@@ -117,6 +124,15 @@ export function ListingModal({
   const [parking, setParking] = React.useState(true);
   const [cctv, setCctv] = React.useState(true);
   const [keycard, setKeycard] = React.useState(true);
+
+  // Sync if pending coordinates are picked from the map
+  React.useEffect(() => {
+    if (pendingCoordinates) {
+      setLat(pendingCoordinates.lat);
+      setLng(pendingCoordinates.lng);
+      setPendingCoordinates(null);
+    }
+  }, [pendingCoordinates, setPendingCoordinates]);
 
   React.useEffect(() => {
     if (initialListing) {
@@ -157,8 +173,9 @@ export function ListingModal({
       // Default reset
       setName("");
       setAddress("");
-      setLat(13.74 + (Math.random() - 0.5) * 0.05);
-      setLng(100.54 + (Math.random() - 0.5) * 0.05);
+      // Keep existing lat/lng if set via quick popup or pending coords, otherwise fallback
+      setLat((prev) => (prev ? prev : 13.74 + (Math.random() - 0.5) * 0.05));
+      setLng((prev) => (prev ? prev : 100.54 + (Math.random() - 0.5) * 0.05));
       setType("condo");
       setStatus("interested");
       setSizeSqm(32);
@@ -314,7 +331,7 @@ export function ListingModal({
                             type="button"
                             size="sm"
                             variant={type === pt.id ? "default" : "outline"}
-                            className="h-8 text-xs capitalize"
+                            className="h-8 text-xs capitalize cursor-pointer"
                             onClick={() => setType(pt.id)}
                           >
                             {pt.name}
@@ -333,7 +350,7 @@ export function ListingModal({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium mb-1">Size (sqm)</label>
                       <Input
@@ -350,24 +367,24 @@ export function ListingModal({
                         onChange={(e) => setFloor(Number(e.target.value))}
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Latitude</label>
-                      <Input
-                        type="number"
-                        step="0.0001"
-                        value={lat}
-                        onChange={(e) => setLat(Number(e.target.value))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium mb-1">Longitude</label>
-                      <Input
-                        type="number"
-                        step="0.0001"
-                        value={lng}
-                        onChange={(e) => setLng(Number(e.target.value))}
-                      />
-                    </div>
+                  </div>
+
+                  {/* 3-Option Location Selector: Link Convert, Click on Map, Manual Lat/Lng */}
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5">
+                      Pinpoint Location & Coordinates
+                    </label>
+                    <LocationInputTabs
+                      lat={lat}
+                      lng={lng}
+                      onCoordinatesChange={(newLat, newLng) => {
+                        setLat(newLat);
+                        setLng(newLng);
+                      }}
+                      onPickOnMap={() => {
+                        startMapPicking("listing");
+                      }}
+                    />
                   </div>
 
                   <div>
@@ -393,6 +410,7 @@ export function ListingModal({
                         type="number"
                         value={rent}
                         onChange={(e) => setRent(Number(e.target.value))}
+                        required
                       />
                     </div>
                     <div>
@@ -490,7 +508,7 @@ export function ListingModal({
                           variant={item.val ? "default" : "outline"}
                           size="sm"
                           className={cn(
-                            "h-8 text-xs gap-1.5 font-medium transition-all",
+                            "h-8 text-xs gap-1.5 font-medium transition-all cursor-pointer",
                             item.val
                               ? "bg-primary text-primary-foreground shadow-xs"
                               : "text-muted-foreground hover:text-foreground bg-background"
@@ -579,10 +597,11 @@ export function ListingModal({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                className="cursor-pointer"
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" className="cursor-pointer">
                 {initialListing ? "Save Changes" : "Create Listing"}
               </Button>
             </DialogFooter>

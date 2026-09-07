@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useMapsStore } from "@/store/maps-store";
 import { CenterPointCategory } from "@/types/hunting";
 import { Trash2 } from "lucide-react";
+import { LocationInputTabs } from "./location-input-tabs";
 
 interface CenterPointModalProps {
   open: boolean;
@@ -26,12 +27,21 @@ export function CenterPointModal({ open, onOpenChange }: CenterPointModalProps) 
     setActiveCenterPoint,
     addCenterPoint,
     deleteCenterPoint,
+    pendingCoordinates,
+    startMapPicking,
   } = useMapsStore();
 
   const [name, setName] = React.useState("");
   const [lat, setLat] = React.useState(13.7462);
   const [lng, setLng] = React.useState(100.5347);
   const [category, setCategory] = React.useState<CenterPointCategory>("workplace");
+
+  React.useEffect(() => {
+    if (open && pendingCoordinates) {
+      setLat(pendingCoordinates.lat);
+      setLng(pendingCoordinates.lng);
+    }
+  }, [pendingCoordinates, open]);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +65,7 @@ export function CenterPointModal({ open, onOpenChange }: CenterPointModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Reference Center Points</DialogTitle>
         </DialogHeader>
@@ -69,7 +79,7 @@ export function CenterPointModal({ open, onOpenChange }: CenterPointModalProps) 
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
               Current Reference Points
             </h4>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {centerPoints.map((cp) => {
                 const isActive = activeCenterPointId === cp.id;
                 return (
@@ -129,28 +139,23 @@ export function CenterPointModal({ open, onOpenChange }: CenterPointModalProps) 
                 placeholder="e.g. New Office, Fitness Gym, Station"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                required
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium mb-1">Latitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={lat}
-                  onChange={(e) => setLat(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Longitude</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  value={lng}
-                  onChange={(e) => setLng(Number(e.target.value))}
-                />
-              </div>
-            </div>
+
+            {/* 3-Option Location Selector */}
+            <LocationInputTabs
+              lat={lat}
+              lng={lng}
+              onCoordinatesChange={(newLat, newLng) => {
+                setLat(newLat);
+                setLng(newLng);
+              }}
+              onPickOnMap={() => {
+                startMapPicking("center-point");
+              }}
+            />
+
             <div>
               <label className="block text-xs font-medium mb-1">Category</label>
               <div className="flex gap-2">
