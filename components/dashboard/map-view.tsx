@@ -1,19 +1,99 @@
 "use client";
 
 import * as React from "react";
-import maplibregl from "maplibre-gl";
+import maplibregl, { type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "next-themes";
 import { useMapsStore, formatDistance, calculateDistance, getLatestRent } from "@/store/maps-store";
 import { propertyTypes, pipelineStatuses } from "@/mock-data/condos";
 import { isValidCoordinates } from "@/lib/utils";
 
-const MAP_STYLES = {
+// High-resolution satellite style with overlay road networks and boundaries/labels (100% free, no API key required)
+const SATELLITE_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    "esri-satellite": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "Esri, Maxar, Earthstar Geographics",
+    },
+    "esri-transportation": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+    },
+    "esri-labels": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: "esri-satellite-layer",
+      type: "raster",
+      source: "esri-satellite",
+      minzoom: 0,
+      maxzoom: 22,
+    },
+    {
+      id: "esri-transportation-layer",
+      type: "raster",
+      source: "esri-transportation",
+      minzoom: 0,
+      maxzoom: 22,
+    },
+    {
+      id: "esri-labels-layer",
+      type: "raster",
+      source: "esri-labels",
+      minzoom: 0,
+      maxzoom: 22,
+    },
+  ],
+};
+
+// Detailed topographic / outdoors style with terrain shading and contours (100% free, no API key required)
+const OUTDOORS_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    "esri-topo": {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "Esri, HERE, Garmin, Intermap, USGS, METI/NASA, EPA",
+    },
+  },
+  layers: [
+    {
+      id: "esri-topo-layer",
+      type: "raster",
+      source: "esri-topo",
+      minzoom: 0,
+      maxzoom: 22,
+    },
+  ],
+};
+
+const MAP_STYLES: Record<string, string | StyleSpecification> = {
   light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
   streets: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-  outdoors: "https://tiles.stadiamaps.com/styles/outdoors.json",
-  satellite: "https://tiles.stadiamaps.com/styles/alidade_satellite.json",
+  outdoors: OUTDOORS_STYLE,
+  satellite: SATELLITE_STYLE,
 };
 
 export function MapView() {
@@ -29,6 +109,12 @@ export function MapView() {
   const closeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isHoveringPopupRef = React.useRef(false);
   const userClickedMarkerRef = React.useRef(false);
+  const lastCenterRef = React.useRef<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
+  const lastZoomRef = React.useRef<number>(12);
+  const routeDataRef = React.useRef<{
+    coordinates: [number, number][];
+    bounds: maplibregl.LngLatBounds;
+  } | null>(null);
   const { resolvedTheme } = useTheme();
 
   const {
@@ -86,11 +172,11 @@ export function MapView() {
 
   const activeCenterPoint = centerPoints.find((cp) => cp.id === activeCenterPointId) || centerPoints[0];
 
-  const getMapStyleUrl = React.useCallback(() => {
+  const getMapStyle = React.useCallback((): string | StyleSpecification => {
     if (mapStyle === "default") {
       return resolvedTheme === "dark" ? MAP_STYLES.dark : MAP_STYLES.light;
     }
-    return MAP_STYLES[mapStyle];
+    return MAP_STYLES[mapStyle] || MAP_STYLES.light;
   }, [mapStyle, resolvedTheme]);
 
   const listings = React.useMemo(() => {
@@ -110,13 +196,72 @@ export function MapView() {
     }, 150);
   }, []);
 
+  // Route drawing function
+  const drawRoute = React.useCallback(
+    (map: maplibregl.Map, coordinates: [number, number][]) => {
+      const clearRouteLayers = () => {
+        if (map.getLayer("route-line")) map.removeLayer("route-line");
+        if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+        if (map.getSource("route")) map.removeSource("route");
+      };
+
+      clearRouteLayers();
+
+      map.addSource("route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates,
+          },
+        },
+      });
+
+      map.addLayer({
+        id: "route-line-outline",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#1d4ed8",
+          "line-width": 8,
+          "line-opacity": 0.3,
+        },
+      });
+
+      map.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#3b82f6",
+          "line-width": 4,
+          "line-opacity": 1,
+        },
+      });
+    },
+    []
+  );
+
   // Initialize Map
   React.useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    lastCenterRef.current = { lat: mapCenter.lat, lng: mapCenter.lng };
+    lastZoomRef.current = mapZoom;
+
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: getMapStyleUrl(),
+      style: getMapStyle(),
       center: [mapCenter.lng, mapCenter.lat],
       zoom: mapZoom,
       minZoom: 3,
@@ -218,10 +363,9 @@ export function MapView() {
       });
 
       const actionPopup = new maplibregl.Popup({
-        offset: [0, -10],
         closeButton: true,
-        closeOnClick: true,
-        className: "location-action-popup",
+        closeOnClick: false,
+        className: "click-action-map-popup",
         maxWidth: "280px",
       })
         .setLngLat([lng, lat])
@@ -234,13 +378,6 @@ export function MapView() {
     mapRef.current = map;
 
     return () => {
-      if (closeTimeoutRef.current) {
-        clearTimeout(closeTimeoutRef.current);
-      }
-      if (clickActionPopupRef.current) {
-        clickActionPopupRef.current.remove();
-        clickActionPopupRef.current = null;
-      }
       map.remove();
       mapRef.current = null;
     };
@@ -250,8 +387,88 @@ export function MapView() {
   // Update map style when theme or mapStyle changes
   React.useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setStyle(getMapStyleUrl());
-  }, [getMapStyleUrl]);
+    mapRef.current.setStyle(getMapStyle());
+  }, [getMapStyle]);
+
+  // Style reload re-draw routes
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleStyleLoad = () => {
+      if (routeDataRef.current && routeDestinationId) {
+        drawRoute(map, routeDataRef.current.coordinates);
+      }
+    };
+
+    map.on("style.load", handleStyleLoad);
+    return () => {
+      map.off("style.load", handleStyleLoad);
+    };
+  }, [drawRoute, routeDestinationId]);
+
+  // Fetch route between active Center Point and destination listing
+  React.useEffect(() => {
+    if (!routeDestinationId || !activeCenterPoint) {
+      routeDataRef.current = null;
+      return;
+    }
+
+    const destination = allListings.find((l) => l.id === routeDestinationId);
+    if (!destination) {
+      routeDataRef.current = null;
+      return;
+    }
+
+    const fetchRoute = async () => {
+      const start = `${activeCenterPoint.lng},${activeCenterPoint.lat}`;
+      const end = `${destination.lng},${destination.lat}`;
+
+      try {
+        const response = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full&geometries=geojson`
+        );
+        const data = await response.json();
+
+        if (data.routes && data.routes[0]) {
+          const coordinates = data.routes[0].geometry.coordinates as [number, number][];
+          const bounds = new maplibregl.LngLatBounds();
+          bounds.extend([activeCenterPoint.lng, activeCenterPoint.lat]);
+          bounds.extend([destination.lng, destination.lat]);
+          coordinates.forEach((coord) => bounds.extend(coord));
+
+          routeDataRef.current = { coordinates, bounds };
+
+          const map = mapRef.current;
+          if (map) {
+            drawRoute(map, coordinates);
+            isAnimatingRef.current = true;
+            map.fitBounds(bounds, { padding: 80 });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch route:", error);
+      }
+    };
+
+    fetchRoute();
+  }, [routeDestinationId, activeCenterPoint, allListings, drawRoute]);
+
+  // Route cleanup when destination cleared
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const clearRouteLayers = () => {
+      if (map.getLayer("route-line")) map.removeLayer("route-line");
+      if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+      if (map.getSource("route")) map.removeSource("route");
+    };
+
+    if (!routeDestinationId) {
+      clearRouteLayers();
+    }
+  }, [routeDestinationId]);
 
   // Render User Location Beacon Marker
   React.useEffect(() => {
@@ -308,9 +525,9 @@ export function MapView() {
       el.innerHTML = `
         <div class="relative flex flex-col items-center animate-bounce">
           <div class="size-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl border-2 border-background ring-4 ring-primary/20">
-            <span class="text-sm font-bold">${pickingTarget === "center-point" ? "🎯" : "📍"}</span>
+            <span class="text-base">${pickingTarget === "center-point" ? "🎯" : "📍"}</span>
           </div>
-          <div class="w-2 h-2 bg-primary rotate-45 -mt-1 border-r border-b border-background"></div>
+          <div class="size-2 bg-primary rotate-45 -mt-1 shadow-sm"></div>
         </div>
       `;
 
@@ -321,9 +538,16 @@ export function MapView() {
         .setLngLat([pendingCoordinates.lng, pendingCoordinates.lat])
         .addTo(mapRef.current);
     }
+
+    return () => {
+      if (tempPinMarkerRef.current) {
+        tempPinMarkerRef.current.remove();
+        tempPinMarkerRef.current = null;
+      }
+    };
   }, [pendingCoordinates, pickingTarget]);
 
-  // Render Center Point Markers (only rebuilt when centerPoints list changes)
+  // Render Center Point Markers (Workplace, target hubs)
   React.useEffect(() => {
     if (!mapRef.current) return;
 
@@ -332,125 +556,95 @@ export function MapView() {
 
     centerPoints.forEach((cp) => {
       const isActive = cp.id === activeCenterPointId;
-
       const el = document.createElement("div");
-      el.className = "center-point-marker select-none cursor-pointer";
-      el.style.zIndex = isActive ? "30" : "20";
+      el.className = "center-point-marker relative group cursor-pointer transition-transform duration-200 hover:scale-110";
 
+      // Keep animation inside inner wrapper to avoid coordinate jumps
       el.innerHTML = `
-        <div class="center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 ${
-          isActive ? "scale-110" : "opacity-80 hover:opacity-100 hover:scale-105"
-        }">
-          <div class="center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 ${
+        <div class="relative flex items-center justify-center">
+          ${
             isActive
-              ? "bg-pink-600 text-white border-pink-700 ring-2 ring-pink-400/40"
-              : "bg-background/95 text-foreground border-border"
-          }">
-            <span>${cp.icon || "🎯"}</span>
-            <span>${cp.name}</span>
-          </div>
-          <div class="size-3.5 rounded-full bg-pink-600 border-2 border-white shadow-sm flex items-center justify-center">
-            <div class="size-1 rounded-full bg-white"></div>
+              ? '<span class="absolute -inset-1 rounded-full bg-pink-500/30 animate-ping"></span>'
+              : ""
+          }
+          <div
+            class="size-8 rounded-full flex items-center justify-center text-xs shadow-md border-2 border-white transition-all ${
+              isActive
+                ? "bg-pink-600 text-white ring-2 ring-pink-400"
+                : "bg-background text-foreground hover:bg-muted"
+            }"
+          >
+            ${cp.icon || "🎯"}
           </div>
         </div>
       `;
 
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-        useMapsStore.getState().setActiveCenterPoint(cp.id);
-      });
+      const popup = new maplibregl.Popup({ offset: [0, -20], closeButton: false })
+        .setHTML(`
+          <div class="text-xs font-semibold px-1 py-0.5 text-center">
+            ${cp.name}
+            ${isActive ? ' <span class="text-pink-500 font-bold">(Target)</span>' : ""}
+          </div>
+        `);
 
-      const marker = new maplibregl.Marker({
-        element: el,
-        anchor: "bottom",
-      })
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([cp.lng, cp.lat])
+        .setPopup(popup)
         .addTo(mapRef.current!);
 
       centerPointMarkersRef.current.set(cp.id, marker);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centerPoints]);
 
-  // Synchronize Center Point active state in-place (100% flicker-free)
-  React.useEffect(() => {
-    centerPointMarkersRef.current.forEach((marker, id) => {
-      const isActive = id === activeCenterPointId;
-      const el = marker.getElement();
-      if (!el) return;
+    return () => {
+      centerPointMarkersRef.current.forEach((marker) => marker.remove());
+      centerPointMarkersRef.current.clear();
+    };
+  }, [centerPoints, activeCenterPointId]);
 
-      el.style.zIndex = isActive ? "30" : "20";
-
-      const inner = el.querySelector<HTMLElement>(".center-point-inner");
-      const badge = el.querySelector<HTMLElement>(".center-point-badge");
-
-      if (isActive) {
-        if (inner) {
-          inner.className =
-            "center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 scale-110";
-        }
-        if (badge) {
-          badge.className =
-            "center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 bg-pink-600 text-white border-pink-700 ring-2 ring-pink-400/40";
-        }
-      } else {
-        if (inner) {
-          inner.className =
-            "center-point-inner origin-bottom flex flex-col items-center transition-transform duration-200 opacity-80 hover:opacity-100 hover:scale-105";
-        }
-        if (badge) {
-          badge.className =
-            "center-point-badge px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1 border whitespace-nowrap mb-0.5 bg-background/95 text-foreground border-border";
-        }
-      }
-    });
-  }, [activeCenterPointId]);
-
-  // Render Listing Markers (only rebuilt when listings or active center point change)
+  // Update condo markers on listings change (Preserves markers in memory, avoids DOM re-creation flickering)
   React.useEffect(() => {
     if (!mapRef.current) return;
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current.clear();
+    const currentListingIds = new Set(listings.map((l) => l.id));
 
+    // Remove markers that no longer exist in the filtered listings
+    markersRef.current.forEach((marker, id) => {
+      if (!currentListingIds.has(id)) {
+        marker.remove();
+        markersRef.current.delete(id);
+      }
+    });
+
+    // Create or update markers
     listings.forEach((listing) => {
-      const isSelected = listing.id === selectedListingId;
+      let marker = markersRef.current.get(listing.id);
+
+      if (marker) {
+        // Just update coordinates if needed
+        marker.setLngLat([listing.lng, listing.lat]);
+        return;
+      }
+
       const rent = getLatestRent(listing);
-      const statusConfig = pipelineStatuses.find((s) => s.id === listing.status);
+      const distanceKm = activeCenterPoint
+        ? calculateDistance(listing.lat, listing.lng, activeCenterPoint.lat, activeCenterPoint.lng)
+        : 0;
+
       const typeConfig = propertyTypes.find((t) => t.id === listing.type);
-      const dist = activeCenterPoint
-        ? calculateDistance(
-            activeCenterPoint.lat,
-            activeCenterPoint.lng,
-            listing.lat,
-            listing.lng
-          )
-        : null;
+      const statusConfig = pipelineStatuses.find((s) => s.id === listing.status);
 
       const el = document.createElement("div");
       el.className = "listing-marker-container select-none cursor-pointer";
-      el.style.zIndex = isSelected ? "40" : "10";
 
-      const formattedRent = rent > 0 ? `฿${Math.round(rent / 1000)}k` : "N/A";
-
+      // Inner container preserves MapLibre root transform positioning
       el.innerHTML = `
-        <div class="marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform ${
-          isSelected ? "scale-115" : "hover:scale-110"
-        }">
-          <div class="marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1.5 border transition-all duration-200 ${
-            isSelected
-              ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/40 shadow-lg"
-              : "bg-background/95 text-foreground border-border hover:border-primary/60"
-          }">
-            <span class="size-2 rounded-full shrink-0" style="background-color: ${
-              statusConfig?.color || "#3b82f6"
-            }"></span>
-            <span class="font-bold tracking-tight">${formattedRent}</span>
-            ${listing.is_favorite ? '<span class="text-[10px] text-amber-500">★</span>' : ""}
+        <div class="listing-marker-inner relative flex flex-col items-center origin-bottom transition-all duration-200">
+          <div class="marker-pill px-2 py-1 rounded-full text-xs font-bold shadow-lg border-2 border-white flex items-center gap-1 whitespace-nowrap bg-background text-foreground transition-all duration-200 hover:scale-105">
+            <span class="marker-status-dot size-2 rounded-full shrink-0" style="background-color: ${statusConfig?.color || "#3b82f6"}"></span>
+            <span class="marker-price">฿${(rent / 1000).toFixed(rent % 1000 === 0 ? 0 : 1)}k</span>
+            ${listing.is_favorite ? '<span class="text-red-500 marker-fav-icon">★</span>' : ""}
           </div>
-          <div class="marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 ${
-            isSelected ? "text-primary" : "text-border"
-          }"></div>
+          <div class="marker-pointer size-2 rotate-45 -mt-1 border-r-2 border-b-2 border-white bg-background transition-colors duration-200"></div>
         </div>
       `;
 
@@ -458,11 +652,13 @@ export function MapView() {
         e.stopPropagation();
         userClickedMarkerRef.current = true;
         selectListing(listing.id);
+        if (popupRef.current) {
+          popupRef.current.remove();
+          popupRef.current = null;
+        }
       });
 
       el.addEventListener("mouseenter", () => {
-        if (isPickingOnMapRef.current) return;
-
         if (closeTimeoutRef.current) {
           clearTimeout(closeTimeoutRef.current);
         }
@@ -471,39 +667,18 @@ export function MapView() {
           popupRef.current.remove();
         }
 
-        const photo = listing.photos[0] || "";
-        const distanceText = dist !== null ? `${formatDistance(dist)} to ${activeCenterPoint?.name || "Center"}` : "";
-
         const popupContent = `
-          <div class="p-3 w-72 text-sm bg-background rounded-xl overflow-hidden shadow-xl border cursor-pointer">
-            ${
-              photo
-                ? `<div class="w-full h-32 rounded-lg overflow-hidden mb-2 bg-muted relative">
-                    <img src="${photo}" alt="${listing.name}" class="w-full h-full object-cover" />
-                    <span class="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-medium ${
-                      statusConfig?.badgeClass || "bg-black/60 text-white"
-                    }">${statusConfig?.name || listing.status}</span>
-                  </div>`
-                : ""
-            }
-            <div class="flex items-start justify-between gap-1 mb-1">
-              <h3 class="font-bold text-sm truncate leading-tight">${listing.name}</h3>
-              <span class="text-xs font-bold text-blue-600 dark:text-blue-400 shrink-0">฿${rent.toLocaleString()}/mo</span>
+          <div class="p-2 space-y-1.5 max-w-[240px] text-xs cursor-pointer">
+            <div class="font-bold text-sm leading-tight hover:text-primary">${listing.name}</div>
+            <div class="text-muted-foreground text-[11px] truncate">${listing.address}</div>
+            <div class="flex items-center justify-between text-xs pt-1 border-t">
+              <span class="font-extrabold text-blue-600 dark:text-blue-400">฿${rent.toLocaleString()}/mo</span>
+              <span class="text-[10px] text-muted-foreground">${listing.size_sqm} m² • Fl ${listing.floor}</span>
             </div>
-            <p class="text-xs text-muted-foreground truncate mb-2">${listing.address}</p>
-            <div class="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-              <span>📐 ${listing.size_sqm} m²</span>
-              <span>🏢 Fl. ${listing.floor}</span>
-              <span class="capitalize">🏷️ ${typeConfig?.name || listing.type}</span>
+            <div class="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+              <span>📍 ${formatDistance(distanceKm)}</span>
+              <span class="font-medium text-foreground">${statusConfig?.name || listing.status}</span>
             </div>
-            ${
-              distanceText
-                ? `<div class="text-[11px] font-medium text-pink-600 dark:text-pink-400 flex items-center gap-1 border-t pt-2">
-                    <span>📍</span>
-                    <span class="truncate">${distanceText}</span>
-                  </div>`
-                : ""
-            }
           </div>
         `;
 
@@ -545,16 +720,16 @@ export function MapView() {
         closePopup();
       });
 
-      const marker = new maplibregl.Marker({
+      const markerInstance = new maplibregl.Marker({
         element: el,
         anchor: "bottom",
       })
         .setLngLat([listing.lng, listing.lat])
         .addTo(mapRef.current!);
 
-      markersRef.current.set(listing.id, marker);
+      markersRef.current.set(listing.id, markerInstance);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedListingId is intentionally synced in separate effect to prevent rebuilding DOM markers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     listings,
     activeCenterPoint,
@@ -569,215 +744,45 @@ export function MapView() {
       const el = marker.getElement();
       if (!el) return;
 
-      el.style.zIndex = isSelected ? "40" : "10";
+      const inner = el.querySelector(".listing-marker-inner") as HTMLElement | null;
+      const pill = el.querySelector(".marker-pill") as HTMLElement | null;
+      const pointer = el.querySelector(".marker-pointer") as HTMLElement | null;
 
-      const wrapper = el.querySelector<HTMLElement>(".marker-wrapper");
-      const pill = el.querySelector<HTMLElement>(".marker-pill");
-      const arrow = el.querySelector<HTMLElement>(".marker-arrow");
+      if (!inner || !pill || !pointer) return;
 
       if (isSelected) {
-        if (wrapper) {
-          wrapper.className =
-            "marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform scale-115";
-        }
-        if (pill) {
-          pill.className =
-            "marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 border transition-all duration-200 bg-primary text-primary-foreground border-primary ring-2 ring-primary/40";
-        }
-        if (arrow) {
-          arrow.className = "marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 text-primary";
-        }
+        inner.style.transform = "scale(1.25)";
+        inner.style.zIndex = "1000";
+        pill.className = "marker-pill px-2.5 py-1 rounded-full text-xs font-extrabold shadow-2xl border-2 border-white flex items-center gap-1 whitespace-nowrap bg-primary text-primary-foreground ring-4 ring-primary/30 transition-all duration-200";
+        pointer.className = "marker-pointer size-2 rotate-45 -mt-1 border-r-2 border-b-2 border-white bg-primary transition-colors duration-200";
+        el.style.zIndex = "1000";
       } else {
-        if (wrapper) {
-          wrapper.className =
-            "marker-wrapper origin-bottom flex flex-col items-center transition-transform duration-200 will-change-transform hover:scale-110";
-        }
-        if (pill) {
-          pill.className =
-            "marker-pill px-2 py-0.5 rounded-full text-xs font-bold shadow-md flex items-center gap-1.5 border transition-all duration-200 bg-background/95 text-foreground border-border hover:border-primary/60";
-        }
-        if (arrow) {
-          arrow.className = "marker-arrow w-2 h-2 bg-current rotate-45 -mt-1 text-border";
-        }
+        inner.style.transform = "scale(1)";
+        inner.style.zIndex = "1";
+        pill.className = "marker-pill px-2 py-1 rounded-full text-xs font-bold shadow-lg border-2 border-white flex items-center gap-1 whitespace-nowrap bg-background text-foreground transition-all duration-200 hover:scale-105";
+        pointer.className = "marker-pointer size-2 rotate-45 -mt-1 border-r-2 border-b-2 border-white bg-background transition-colors duration-200";
+        el.style.zIndex = "1";
       }
     });
-  }, [selectedListingId]);
 
-  // Route drawing function
-  const drawRoute = React.useCallback(
-    (map: maplibregl.Map, coordinates: [number, number][]) => {
-      const clearRouteLayers = () => {
-        if (map.getLayer("route-line")) map.removeLayer("route-line");
-        if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
-        if (map.getSource("route")) map.removeSource("route");
-      };
-
-      clearRouteLayers();
-
-      map.addSource("route", {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates,
-          },
-        },
-      });
-
-      map.addLayer({
-        id: "route-line-outline",
-        type: "line",
-        source: "route",
-        layout: {
-          "line-join": "round",
-          "line-cap": "round",
-        },
-        paint: {
-          "line-color": "#1d4ed8",
-          "line-width": 8,
-          "line-opacity": 0.3,
-        },
-      });
-
-      map.addLayer({
-        id: "route-line",
-        type: "line",
-        source: "route",
-        layout: {
-          "line-join": "round",
-          "line-cap": "round",
-        },
-        paint: {
-          "line-color": "#3b82f6",
-          "line-width": 4,
-          "line-opacity": 1,
-        },
-      });
-    },
-    []
-  );
-
-  const routeDataRef = React.useRef<{
-    coordinates: [number, number][];
-    bounds: maplibregl.LngLatBounds;
-  } | null>(null);
-
-  // Fetch route between active Center Point and destination listing
-  React.useEffect(() => {
-    if (!routeDestinationId || !activeCenterPoint) {
-      routeDataRef.current = null;
-      return;
-    }
-
-    const destination = allListings.find((l) => l.id === routeDestinationId);
-    if (!destination) {
-      routeDataRef.current = null;
-      return;
-    }
-
-    const fetchRoute = async () => {
-      const start = `${activeCenterPoint.lng},${activeCenterPoint.lat}`;
-      const end = `${destination.lng},${destination.lat}`;
-
-      try {
-        const response = await fetch(
-          `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full&geometries=geojson`
-        );
-        const data = await response.json();
-
-        if (data.routes && data.routes[0]) {
-          const coordinates = data.routes[0].geometry.coordinates as [number, number][];
-          const bounds = new maplibregl.LngLatBounds();
-          bounds.extend([activeCenterPoint.lng, activeCenterPoint.lat]);
-          bounds.extend([destination.lng, destination.lat]);
-          coordinates.forEach((coord) => bounds.extend(coord));
-
-          routeDataRef.current = { coordinates, bounds };
-
-          const map = mapRef.current;
-          if (map) {
-            drawRoute(map, coordinates);
-            isAnimatingRef.current = true;
-            map.fitBounds(bounds, { padding: 80 });
-          }
+    if (selectedListingId && mapRef.current) {
+      const selectedListing = listings.find((l) => l.id === selectedListingId);
+      if (selectedListing) {
+        if (userClickedMarkerRef.current) {
+          userClickedMarkerRef.current = false;
+        } else {
+          isAnimatingRef.current = true;
+          mapRef.current.easeTo({
+            center: [selectedListing.lng, selectedListing.lat],
+            zoom: Math.max(mapRef.current.getZoom(), 14),
+            duration: 800,
+          });
         }
-      } catch (error) {
-        console.error("Failed to fetch route:", error);
       }
-    };
-
-    fetchRoute();
-  }, [routeDestinationId, activeCenterPoint, allListings, drawRoute]);
-
-  // Route cleanup
-  React.useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const clearRouteLayers = () => {
-      if (map.getLayer("route-line")) map.removeLayer("route-line");
-      if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
-      if (map.getSource("route")) map.removeSource("route");
-    };
-
-    if (!routeDestinationId) {
-      clearRouteLayers();
     }
-  }, [routeDestinationId]);
+  }, [selectedListingId, listings]);
 
-  // Style reload re-draw
-  React.useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const handleStyleLoad = () => {
-      if (routeDataRef.current && routeDestinationId) {
-        drawRoute(map, routeDataRef.current.coordinates);
-      }
-    };
-
-    map.on("style.load", handleStyleLoad);
-    return () => {
-      map.off("style.load", handleStyleLoad);
-    };
-  }, [drawRoute, routeDestinationId]);
-
-  // Fly to selected listing (only when selected from panel/table, NOT when clicking marker directly)
-  React.useEffect(() => {
-    if (!mapRef.current || !selectedListingId) return;
-    if (routeDestinationId) return;
-
-    if (userClickedMarkerRef.current) {
-      // User clicked pin directly on map: keep camera stationary so pin stays under cursor without shifting
-      userClickedMarkerRef.current = false;
-      return;
-    }
-
-    const listing = listings.find((l) => l.id === selectedListingId);
-    if (listing) {
-      isAnimatingRef.current = true;
-      const targetZoom = Math.max(mapRef.current.getZoom(), 14);
-      lastCenterRef.current = { lat: listing.lat, lng: listing.lng };
-      lastZoomRef.current = targetZoom;
-
-      mapRef.current.flyTo({
-        center: [listing.lng, listing.lat],
-        zoom: targetZoom,
-        duration: 500,
-        essential: true,
-      });
-    }
-  }, [selectedListingId, listings, routeDestinationId]);
-
-  // Center & zoom sync
-  const lastCenterRef = React.useRef({
-    lat: mapCenter.lat,
-    lng: mapCenter.lng,
-  });
-  const lastZoomRef = React.useRef(mapZoom);
-
+  // Center & zoom sync from store
   React.useEffect(() => {
     if (!mapRef.current) return;
     if (isAnimatingRef.current) return;
